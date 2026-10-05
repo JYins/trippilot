@@ -1,6 +1,6 @@
 """实验 B：记忆抽取 precision/recall 实测。
 
-1. 16 条 fixtures/memory_extract_cases.jsonl：逐条跑 extract_candidates，
+1. 23 条 fixtures/memory_extract_cases.jsonl：逐条跑 extract_candidates，
    按 content 精确匹配算 TP/FP/FN → 总体 P/R；再按触发规则拆分
    （每条正例命中了哪条规则，哪条规则在拉胯）。
 2. extra probes：刻意挑规则的灰色地带——
@@ -27,10 +27,13 @@ import trippilot.memory.extract as extract_mod  # noqa: E402  _which_rule 反查
 
 # 灰色地带探针：(原文, 期望抽到？, 备注)
 EXTRA_PROBES = [
-    ("别走这条路", False, "一次性导航指令：最典型的'别'误抽场景"),
-    ("今天堵车，以后别走这条路", False, "分句里的一次性指令"),
+    ("别走这条路", False, "一次性导航指令：20251006 起裸'别'不再触发抽取"),
+    ("今天堵车，以后别走这条路", True,
+     "改判 20251006：单句层面分不清'以后别走这条路'(事件型)和"
+     "'以后别放广告'(稳定型)；有'以后'显式持久标记就抽，0.65 走 Gate "
+     "问人。见 decisions/20251006-memory-negation-fix.md"),
     ("别急，慢慢来", False, "安慰语，不是偏好"),
-    ("不要急", False, "安慰语，'不要'触发"),
+    ("不要急", False, "安慰语反例：裸'不要'已不触发抽取"),
     ("以后别再给我放广告了", True, "真·稳定禁忌：'别再'句式"),
     ("我喜欢今天的歌单", False, "当下一时情绪 vs 稳定偏好"),
     ("我喜欢坐地铁", True, "稳定偏好：应该抽到"),
@@ -42,8 +45,9 @@ EXTRA_PROBES = [
 ]
 
 # 规则身份：按 extract.py _RULES 的顺序
+# （20251006 起第 9 条只认"以后/再"持久标记，见 decisions/20251006-*.md）
 RULE_NAMES = ["记住型", "电话型", "裸号码", "住址型", "称呼型", "生日型",
-              "以后都型", "我喜欢型", "别/不要型"]
+              "以后都型", "我喜欢型", "持久否定型"]
 
 
 def _which_rule(text: str) -> str:
@@ -106,7 +110,7 @@ def main() -> None:
     recall = tp / (tp + fn) if tp + fn else 1.0
 
     print("=" * 64)
-    print("实验 B：记忆抽取 P/R 实测（16 条 fixture + 12 条灰色探针）")
+    print("实验 B：记忆抽取 P/R 实测（23 条 fixture + 12 条灰色探针）")
     print("=" * 64)
     print(f"fixture 总体：TP={tp} FP={fp} FN={fn} "
           f"precision={precision:.3f} recall={recall:.3f}")

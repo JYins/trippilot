@@ -45,9 +45,20 @@ def test_confidence_ordering():
     label = conf("叫我 Jeremy")
     persistent = conf("以后都坐地铁")
     like = conf("我喜欢坐地铁")
-    forbid = conf("别给我放广告")
+    forbid = conf("以后别给我放广告")
     assert remember > label > persistent > like > forbid
-    assert forbid < 0.7  # 禁止句式和一次性指令无法区分，置信度垫底
+    assert forbid < 0.7  # 即使有"以后"也分不清真禁忌和带情绪的一次性抱怨，
+    # 禁止句式置信度垫底：模糊的让 Gate 问人
+
+
+def test_bare_negation_suppressed():
+    """回归 20251006：裸"别/不要"是一次性指令，不产出候选；
+    只有带"以后/再"持久标记的否定才抽（见 fixture 新增用例）。"""
+    for text in ["别走这条路", "别急，慢慢来", "不要急", "慢点，别走这条路"]:
+        assert extract_candidates(text) == [], text
+    # 持久型否定照常抽，置信度仍是全场最低
+    kept = extract_candidates("别再给我导航走高速")
+    assert len(kept) == 1 and kept[0]["confidence"] == 0.65
 
 
 def test_output_sorted_by_confidence():

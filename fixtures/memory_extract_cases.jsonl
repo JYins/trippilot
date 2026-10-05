@@ -14,3 +14,10 @@
 {"text": "查一下明天北京的天气怎么样", "expect": []}
 {"text": "记住这个", "expect": []}
 {"text": "", "expect": []}
+{"text": "别走这条路", "expect": []}
+{"text": "别急，慢慢来", "expect": []}
+{"text": "不要急", "expect": []}
+{"text": "慢点，别走这条路", "expect": []}
+{"text": "别再给我导航走高速", "expect": [{"content": "别再给我导航走高速", "kind": "auth", "sensitivity": "normal", "min_confidence": 0.6}]}
+{"text": "不要再放广告了", "expect": [{"content": "不要再放广告了", "kind": "auth", "sensitivity": "normal", "min_confidence": 0.6}]}
+{"text": "以后不要给我放广告", "expect": [{"content": "以后不要给我放广告", "kind": "auth", "sensitivity": "normal", "min_confidence": 0.6}]}
