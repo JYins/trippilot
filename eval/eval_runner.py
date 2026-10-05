@@ -7,7 +7,9 @@
   期望的 deny/degrade reason_code；
 - 输出固定结构的版本报告（见计划 §④）。
 
-硬安全规则由程序断言，不交给 LLM Judge。
+硬安全规则由程序断言，不交给 LLM Judge。judge 只评两个"规则写不出的维度"
+（轨迹合理性 plan_efficiency、澄清质量 clarify_quality），分数只进报告、
+不进 pass/fail 门；无 TRIPPILOT_JUDGE_API_KEY 时报告标注 pending。
 """
 
 from __future__ import annotations
@@ -25,6 +27,11 @@ from trippilot.llm import DeterministicStub, ScriptedLLM
 from trippilot.memory.store import PreferenceStore, hash_embedder
 from trippilot.state import ASRResult
 from trippilot.tools.tools import ReminderTool, TripLogTool
+from eval.judge import (
+    DIM_CLARIFY_QUALITY,
+    DIM_PLAN_EFFICIENCY,
+    DeepSeekJudge,
+)
 
 
 def load_dataset(path: Path) -> list[dict]:
@@ -56,7 +63,7 @@ def _memory_events_ok(trace, mem_store) -> bool:
     return True
 
 
-def run_case(case: dict) -> dict:
+def run_case(case: dict, judge=None) -> dict:
     ReminderTool.reset()
     TripLogTool.reset()
     llm = (ScriptedLLM(case["scripted_plan"]) if "scripted_plan" in case
@@ -118,7 +125,7 @@ def run_case(case: dict) -> dict:
     mem_store.close()
     mem_dir.cleanup()
 
-    return {
+    result = {
         "case_id": case["case_id"],
         "passed": passed,
         "node_coverage": round(node_coverage, 3),
@@ -135,24 +142,48 @@ def run_case(case: dict) -> dict:
         "final_response": out.final_response,
     }
 
+    # judge 只写进报告，不参与上面的 passed 判定（铁律）
+    if judge is not None:
+        try:
+            js = judge.score(case, result)
+            result["judge"] = {"dimensions": js.dimensions, "notes": js.notes}
+        except Exception as e:  # judge 挂了不炸整轮评测，如实记错
+            result["judge"] = {"error": str(e)}
+    return result
+
 
 def main() -> int:
     dataset = ROOT / "fixtures" / "dataset_v0.jsonl"
     cases = load_dataset(dataset)
-    results = [run_case(c) for c in cases]
+    try:
+        judge = DeepSeekJudge()
+        judge_line = f"judge: {DeepSeekJudge.MODEL}（advisory，仅报告不判分）"
+    except RuntimeError:
+        judge = None
+        judge_line = "judge: pending(需 TRIPPILOT_JUDGE_API_KEY)"
+
+    results = [run_case(c, judge=judge) for c in cases]
 
     passed = sum(1 for r in results if r["passed"])
     print("=" * 64)
     print("TripPilot eval report  ·  v0.1  ·  数据集: dataset_v0 "
           f"({len(cases)} 条)")
+    print(judge_line)
     print("=" * 64)
     print(f"通过: {passed}/{len(cases)}")
     for r in results:
         mark = "PASS" if r["passed"] else "FAIL"
-        print(f"[{mark}] {r['case_id']}  "
-              f"node_cov={r['node_coverage']} "
-              f"forbidden={r['forbidden_hit'] or '-'} "
-              f"unexpected={r['unexpected_tools'] or '-'}")
+        line = (f"[{mark}] {r['case_id']}  "
+                f"node_cov={r['node_coverage']} "
+                f"forbidden={r['forbidden_hit'] or '-'} "
+                f"unexpected={r['unexpected_tools'] or '-'}")
+        j = r.get("judge")
+        if j and "dimensions" in j:
+            line += (f"  judge_plan_eff={j['dimensions'].get(DIM_PLAN_EFFICIENCY)} "
+                     f"clarify_q={j['dimensions'].get(DIM_CLARIFY_QUALITY)}")
+        elif j and "error" in j:
+            line += f"  judge_error={j['error'][:60]}"
+        print(line)
         if not r["passed"]:
             print(f"       missing={r['missing_nodes']} "
                   f"confirm_ok={r['confirm_ok']} deny_ok={r['deny_ok']} "
@@ -160,9 +191,15 @@ def main() -> int:
                   f"memory_events_ok={r['memory_events_ok']}")
             print(f"       visited={r['visited_nodes']}")
             print(f"       verification={r['verification']}")
+        if j and "notes" in j:
+            print(f"       judge_notes={j['notes']}")
     print("=" * 64)
     print("说明：全部用例使用 recorded 工具响应 + stub/脚本 LLM；")
     print("      真实模型与真实录音的实测指标待接入后单独报告。")
+    if judge is None:
+        print("      judge 分数 pending：未设置 TRIPPILOT_JUDGE_API_KEY。")
+    else:
+        print("      judge 分数为参考（advisory），不影响 pass/fail 判定。")
     return 0 if passed == len(cases) else 1
 
 
