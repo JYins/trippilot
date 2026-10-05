@@ -20,6 +20,7 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 
 from .llm import LLMClient, DeterministicStub
+from .memory.extract import extract_candidates
 from .memory.store import MemoryRejected, PreferenceStore
 from .policy_gate import check_tool_call, scan_tool_text
 from .state import (ASRResult, PlanStep, PolicyDecision, ToolCall, ToolResult,
@@ -259,13 +260,26 @@ def build_graph(llm: LLMClient | None = None,
         # 逐条过 Memory Gate 写偏好；sensitive 挂起，走现有 human_confirm。
         # 已确认（confirmation_state == "confirmed"）时把挂起的一并写入，
         # 保证 human_confirm 事件先于实际写入。
+        # 外部没给 memory_candidates 时从本轮 user_request 自动抽取一次：
+        # 抽到的候选照样逐条走下面的 Gate 流程，不绕过。human_confirm
+        # 回绕进来时 user_request 没变，不重复抽（否则确认后会重复写盘）。
         written: list[str] = []
         rejected: list[str] = []
         pending: list[dict[str, Any]] = []
         decisions = list(state.policy_decisions)
         confirmed = state.confirmation_state == "confirmed"
+        candidates = list(state.memory_candidates)
+        extracted = 0
+        trip_context = dict(state.trip_context)
         if memory_store is not None:
             uid = state.user_attributes.get("user_id", "owner")
+            if not candidates and \
+                    trip_context.get("extracted_from") != state.user_request:
+                candidates = extract_candidates(
+                    state.user_request,
+                    {"user_id": uid, "session_id": state.session_id})
+                extracted = len(candidates)
+                trip_context["extracted_from"] = state.user_request
             if confirmed:
                 # 上一轮 Gate 已判 confirm（能进 pending 的前提），现已确认：
                 # 直接 _insert，不重复跑 Gate；deny 的候选进不了 pending
@@ -275,7 +289,7 @@ def build_graph(llm: LLMClient | None = None,
                 # 未确认：上一轮挂起的继续保留，重新走 human_confirm，不能静默丢
                 for cand in state.pending_memory_confirms:
                     _mark_pending(pending, decisions, cand)
-            for cand in state.memory_candidates:
+            for cand in candidates:
                 try:
                     status, mid = _capture_candidate(
                         memory_store, uid, cand, confirmed)
@@ -290,8 +304,9 @@ def build_graph(llm: LLMClient | None = None,
                  "confirm_needed" if pending else "nothing_to_capture")
         upd = _trace(state, "memory_capture", event,
                      {"written": written, "rejected": rejected,
-                      "pending": len(pending)})
+                      "pending": len(pending), "extracted": extracted})
         upd["policy_decisions"] = decisions
+        upd["trip_context"] = trip_context
         upd["memory_candidates"] = []
         upd["pending_memory_confirms"] = pending
         return upd

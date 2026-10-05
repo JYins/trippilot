@@ -1,0 +1,16 @@
+{"text": "记住我喜欢坐地铁", "expect": [{"content": "我喜欢坐地铁", "kind": "other", "sensitivity": "normal", "min_confidence": 0.85}]}
+{"text": "请记住我以后都走高速", "expect": [{"content": "我以后都走高速", "kind": "other", "sensitivity": "normal", "min_confidence": 0.85}]}
+{"text": "以后都导航走北五环", "expect": [{"content": "导航走北五环", "kind": "other", "sensitivity": "normal", "min_confidence": 0.75}]}
+{"text": "我不喜欢走高速", "expect": [{"content": "我不喜欢走高速", "kind": "other", "sensitivity": "normal", "min_confidence": 0.7}]}
+{"text": "叫我 Jeremy", "expect": [{"content": "Jeremy", "kind": "label", "sensitivity": "normal", "min_confidence": 0.8}]}
+{"text": "以后别给我放广告", "expect": [{"content": "以后别给我放广告", "kind": "auth", "sensitivity": "normal", "min_confidence": 0.6}]}
+{"text": "记住我家住在望京XX小区1号楼", "expect": [{"content": "我家住在望京XX小区1号楼", "kind": "place", "sensitivity": "sensitive", "min_confidence": 0.85}]}
+{"text": "我家在朝阳区XX路", "expect": [{"content": "朝阳区XX路", "kind": "place", "sensitivity": "sensitive", "min_confidence": 0.85}]}
+{"text": "记住我的电话是13812345678", "expect": [{"content": "我的电话是13812345678", "kind": "auth", "sensitivity": "sensitive", "min_confidence": 0.85}]}
+{"text": "我生日是11月20日", "expect": [{"content": "11月20日", "kind": "other", "sensitivity": "sensitive", "min_confidence": 0.8}]}
+{"text": "帮我查一下天气", "expect": []}
+{"text": "导航去三里屯", "expect": []}
+{"text": "带我去机场", "expect": []}
+{"text": "查一下明天北京的天气怎么样", "expect": []}
+{"text": "记住这个", "expect": []}
+{"text": "", "expect": []}
