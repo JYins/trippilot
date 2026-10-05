@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 # advisory 维度：只进报告，不进 verdict
@@ -75,24 +77,52 @@ class DeterministicJudge:
 
 
 class DeepSeekJudge:
-    """live judge：OpenAI-compatible chat API。
+    """live judge：优先走 deepseek skill CLI 子进程。
 
-    无 key 时构造直接抛错——幻觉出来的分数比没有分数更伤评测可信度，
-    所以这里绝不 fallback 到 fake 分数。
+    不把 key 写进配置：skill CLI 走 authd surrogate，进程里永远见不到
+    明文 key，日志和报错都带不出来。TRIPPILOT_JUDGE_API_KEY 只是备用，
+    给没有 skill 的机器用。两者都没有时构造直接抛错——幻觉出来的分数
+    比没分数更伤评测可信度。
     """
 
     BASE_URL = "https://api.deepseek.com"
     MODEL = "deepseek-chat"
+    CLI = Path.home() / "workspace/skills/deepseek/bin/deepseek-chat"
 
-    def __init__(self) -> None:
-        key = os.environ.get("TRIPPILOT_JUDGE_API_KEY", "").strip()
-        if not key:
+    def __init__(self, cli_path: Path | None = None) -> None:
+        self._cli = Path(cli_path) if cli_path is not None else self.CLI
+        self._key = os.environ.get("TRIPPILOT_JUDGE_API_KEY", "").strip()
+        if self._cli.is_file() and os.access(self._cli, os.X_OK):
+            self.via = "cli"
+        elif self._key:
+            self.via = "env"
+        else:
             raise RuntimeError(
-                "live 测试 pending，需用户开通 DeepSeek API key："
-                "设置环境变量 TRIPPILOT_JUDGE_API_KEY 后再跑。")
-        self._key = key
+                "live 测试 pending：deepseek skill 不可用，"
+                "也没检测到 TRIPPILOT_JUDGE_API_KEY。"
+                "用户开通 DeepSeek API 后再跑。")
 
     def _chat(self, system: str, user: str) -> str:
+        if self.via == "cli":
+            try:
+                return self._chat_cli(system, user)
+            except (subprocess.SubprocessError, OSError):
+                # CLI 挂了：有备用 key 就降级直调，没有就如实抛错
+                if not self._key:
+                    raise
+        return self._chat_http(system, user)
+
+    def _chat_cli(self, system: str, user: str) -> str:
+        # wrapper 超时要大于 CLI 自己的 120s，让 CLI 先按自己的语义超时
+        proc = subprocess.run(
+            [str(self._cli), "--json", "--temperature", "0.2",
+             "--system", system],
+            input=user, capture_output=True, text=True, timeout=130,
+        )
+        proc.check_returncode()
+        return proc.stdout
+
+    def _chat_http(self, system: str, user: str) -> str:
         import httpx
         resp = httpx.post(
             f"{self.BASE_URL}/chat/completions",

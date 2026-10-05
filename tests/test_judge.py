@@ -7,6 +7,7 @@ DeterministicJudge 纯规则、DeepSeekJudge 无 key 必抛错。
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -91,20 +92,86 @@ def test_deterministic_judge_clarify_heuristics():
     assert s.dimensions[DIM_CLARIFY_QUALITY] < 0.6
 
 
-def test_deepseek_judge_requires_key(monkeypatch):
+def _no_cli(monkeypatch, tmp_path):
+    # 把类默认的 CLI 路径指到不存在的位置，模拟"机器上没装 skill"
+    monkeypatch.setattr(DeepSeekJudge, "CLI", tmp_path / "no-such-cli")
+
+
+def test_deepseek_judge_requires_key_or_cli(tmp_path, monkeypatch):
+    _no_cli(monkeypatch, tmp_path)
     monkeypatch.delenv("TRIPPILOT_JUDGE_API_KEY", raising=False)
     with pytest.raises(RuntimeError, match="pending"):
         DeepSeekJudge()
 
 
-def test_deepseek_judge_error_message_guides_user(monkeypatch):
+def test_deepseek_judge_error_message_guides_user(tmp_path, monkeypatch):
+    _no_cli(monkeypatch, tmp_path)
     monkeypatch.delenv("TRIPPILOT_JUDGE_API_KEY", raising=False)
     with pytest.raises(RuntimeError) as exc:
         DeepSeekJudge()
     assert "TRIPPILOT_JUDGE_API_KEY" in str(exc.value)
-    assert "DeepSeek API key" in str(exc.value)
+    assert "DeepSeek API" in str(exc.value)
 
 
 def test_deepseek_judge_targets_deepseek_api():
     assert DeepSeekJudge.BASE_URL == "https://api.deepseek.com"
     assert DeepSeekJudge.MODEL == "deepseek-chat"
+
+
+def _fake_cli(tmp_path: Path, script: str) -> Path:
+    p = tmp_path / "deepseek-chat"
+    p.write_text(script)
+    p.chmod(0o755)
+    return p
+
+
+_FAKE_OK = (
+    "#!/usr/bin/env python3\n"
+    "import sys, json\n"
+    "sys.stdin.read()\n"
+    'print(json.dumps({"plan_efficiency": 0.8, "clarify_quality": 0.9,'
+    ' "notes": "fake-cli"}))\n'
+)
+
+
+def test_deepseek_judge_prefers_cli_over_env(tmp_path, monkeypatch):
+    # 有 CLI 时不需要 env key：key 根本不该进进程
+    monkeypatch.delenv("TRIPPILOT_JUDGE_API_KEY", raising=False)
+    j = DeepSeekJudge(cli_path=_fake_cli(tmp_path, _FAKE_OK))
+    assert j.via == "cli"
+    s = j.score({"case_id": "x", "context": {}},
+                {"visited_nodes": ["intent"], "unexpected_tools": [],
+                 "final_response": "ok"})
+    assert s.dimensions[DIM_PLAN_EFFICIENCY] == 0.8
+    assert s.dimensions[DIM_CLARIFY_QUALITY] == 0.9
+    assert s.notes == "fake-cli"
+
+
+def test_deepseek_judge_falls_back_to_env_when_cli_missing(tmp_path,
+                                                           monkeypatch):
+    _no_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("TRIPPILOT_JUDGE_API_KEY", "sk-fake")
+    j = DeepSeekJudge()
+    assert j.via == "env"
+    assert j._key == "sk-fake"
+
+
+def test_deepseek_judge_cli_failure_falls_back_to_http(tmp_path, monkeypatch):
+    # CLI 挂了 + 有 key → 降级直调（_chat_http 被替掉，不真发请求）
+    bad = _fake_cli(tmp_path, "#!/bin/sh\nexit 1\n")
+    monkeypatch.setenv("TRIPPILOT_JUDGE_API_KEY", "sk-fake")
+    j = DeepSeekJudge(cli_path=bad)
+    canned = json.dumps({"plan_efficiency": 0.7, "clarify_quality": 0.7,
+                         "notes": "fallback"})
+    monkeypatch.setattr(j, "_chat_http", lambda s, u: canned)
+    s = j.score({"case_id": "x"}, {"visited_nodes": []})
+    assert s.notes == "fallback"
+
+
+def test_deepseek_judge_cli_failure_without_key_raises(tmp_path, monkeypatch):
+    # CLI 挂了 + 没 key → 如实抛错，不 fake 分数
+    bad = _fake_cli(tmp_path, "#!/bin/sh\nexit 1\n")
+    monkeypatch.delenv("TRIPPILOT_JUDGE_API_KEY", raising=False)
+    j = DeepSeekJudge(cli_path=bad)
+    with pytest.raises(subprocess.CalledProcessError):
+        j._chat("sys", "user")

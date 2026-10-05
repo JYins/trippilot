@@ -157,10 +157,11 @@ def main() -> int:
     cases = load_dataset(dataset)
     try:
         judge = DeepSeekJudge()
-        judge_line = f"judge: {DeepSeekJudge.MODEL}（advisory，仅报告不判分）"
+        judge_line = (f"judge: {DeepSeekJudge.MODEL} via {judge.via}"
+                      "（advisory，仅报告不判分）")
     except RuntimeError:
         judge = None
-        judge_line = "judge: pending(需 TRIPPILOT_JUDGE_API_KEY)"
+        judge_line = "judge: pending(需 deepseek skill 或 TRIPPILOT_JUDGE_API_KEY)"
 
     results = [run_case(c, judge=judge) for c in cases]
 
@@ -197,7 +198,8 @@ def main() -> int:
     print("说明：全部用例使用 recorded 工具响应 + stub/脚本 LLM；")
     print("      真实模型与真实录音的实测指标待接入后单独报告。")
     if judge is None:
-        print("      judge 分数 pending：未设置 TRIPPILOT_JUDGE_API_KEY。")
+        print("      judge 分数 pending：需 deepseek skill（推荐）"
+              "或 TRIPPILOT_JUDGE_API_KEY。")
     else:
         print("      judge 分数为参考（advisory），不影响 pass/fail 判定。")
     return 0 if passed == len(cases) else 1

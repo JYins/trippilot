@@ -7,7 +7,7 @@ stdout + data/judge_agreement.json 落盘保证。
 """
 
 from eval.judge import DIM_CLARIFY_QUALITY, DIM_PLAN_EFFICIENCY
-from eval.judge_agreement import analyze, run_synthetic_probes
+from eval.judge_agreement import analyze, analyze_live, run_synthetic_probes
 
 
 def test_synthetic_bad_traces_all_flagged():
@@ -45,3 +45,35 @@ def test_analyze_rule_fail_not_counted_as_judge_bad():
     a = analyze(rows)
     # 规则 FAIL 的 case 不进"规则过了但 judge 烂"统计
     assert a["judge_bad_but_rule_pass"] == []
+
+
+def _live_row(case_id, det_plan, det_clar, live_plan, live_clar):
+    return {"case_id": case_id, "passed": True,
+            "det": {DIM_PLAN_EFFICIENCY: det_plan,
+                    DIM_CLARIFY_QUALITY: det_clar},
+            "live": {DIM_PLAN_EFFICIENCY: live_plan,
+                     DIM_CLARIFY_QUALITY: live_clar},
+            "delta_plan": round(abs(live_plan - det_plan), 3),
+            "delta_clarify": round(abs(live_clar - det_clar), 3)}
+
+
+def test_analyze_live_classifies_stricter_side():
+    rows = [_live_row("A", 1.0, 1.0, 0.5, 1.0),   # live 更严
+            _live_row("B", 0.5, 1.0, 0.9, 1.0),   # det 误伤
+            {"case_id": "C", "live_error": "boom"}]
+    a = analyze_live(rows)
+    assert a["n"] == 3
+    assert a["live_ok"] == 2
+    assert a["live_errors"] == ["C"]
+    assert a["mean_abs_delta_plan"] == 0.45
+    assert a["live_stricter"] == ["A"]
+    assert a["det_stricter"] == ["B"]
+
+
+def test_analyze_live_ignores_rule_failed_cases():
+    # 规则 verdict 已经 FAIL 的 case，live 再严也不算"发现新东西"
+    row = _live_row("F", 1.0, 1.0, 0.5, 1.0)
+    row["passed"] = False
+    a = analyze_live([row])
+    assert a["live_stricter"] == []
+    assert a["det_stricter"] == []

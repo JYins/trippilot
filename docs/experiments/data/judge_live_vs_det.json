@@ -1,0 +1,214 @@
+{
+  "rows": [
+    {
+      "case_id": "TP-ROUTE-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.9,
+        "clarify_quality": 1.0
+      },
+      "live_notes": "轨迹按意图-记忆-澄清-规划-确认-执行-校验推进，无冗余绕路，但澄清节点未在最终响应中体现具体追问内容，整体合理。",
+      "delta_plan": 0.1,
+      "delta_clarify": 0.4
+    },
+    {
+      "case_id": "TP-AMBIG-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 1.0
+      },
+      "live": {
+        "plan_efficiency": 0.7,
+        "clarify_quality": 0.5
+      },
+      "live_notes": "轨迹包含澄清节点但未体现具体追问内容，且存在'北京西站'与'西站地铁站'两个歧义选项，澄清质量存疑；整体流程节点完整无明显冗余。",
+      "delta_plan": 0.3,
+      "delta_clarify": 0.5
+    },
+    {
+      "case_id": "TP-LOWCONF-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 1.0
+      },
+      "live": {
+        "plan_efficiency": 0.6,
+        "clarify_quality": 0.3
+      },
+      "live_notes": "低ASR置信度下应澄清具体日程，但轨迹未点名歧义选项且最终回复与用户意图不符。",
+      "delta_plan": 0.4,
+      "delta_clarify": 0.7
+    },
+    {
+      "case_id": "TP-DRIVE-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.7,
+        "clarify_quality": 0.5
+      },
+      "live_notes": "轨迹包含澄清节点但未体现具体追问内容，且最终仅返回'已执行'未给出方案对比，效率与澄清质量均一般。",
+      "delta_plan": 0.3,
+      "delta_clarify": 0.1
+    },
+    {
+      "case_id": "TP-MEM-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 0.3999999999999999,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.6,
+        "clarify_quality": 0.5
+      },
+      "live_notes": "轨迹在澄清后仍重复执行工具与记忆捕获，存在冗余；澄清未点名具体偏好选项，追问不够明确。",
+      "delta_plan": 0.2,
+      "delta_clarify": 0.1
+    },
+    {
+      "case_id": "TP-MEM-002",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.4,
+        "clarify_quality": 0.5
+      },
+      "live_notes": "轨迹包含澄清与规划节点但最终未执行任何工具，且澄清未点名具体歧义选项，整体效率与澄清质量均偏低。",
+      "delta_plan": 0.6,
+      "delta_clarify": 0.1
+    },
+    {
+      "case_id": "TP-MEM-003",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.9,
+        "clarify_quality": 1.0
+      },
+      "live_notes": "流程简洁无冗余，敏感记忆走确认符合策略，无歧义故澄清满分。",
+      "delta_plan": 0.1,
+      "delta_clarify": 0.4
+    },
+    {
+      "case_id": "TP-CLARIFY-002",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 1.0
+      },
+      "live": {
+        "plan_efficiency": 0.9,
+        "clarify_quality": 0.6
+      },
+      "live_notes": "轨迹整体顺畅无冗余，但ASR置信度低且目的地存在歧义时，澄清环节未明确追问具体机场选项，澄清质量一般。",
+      "delta_plan": 0.1,
+      "delta_clarify": 0.4
+    },
+    {
+      "case_id": "TP-DRIVE-002",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.6,
+        "clarify_quality": 0.5
+      },
+      "live_notes": "轨迹包含澄清节点但未展示追问内容，且最终仅返回工具执行状态，未给出两个方案对比，规划与澄清质量均不足。",
+      "delta_plan": 0.4,
+      "delta_clarify": 0.1
+    },
+    {
+      "case_id": "TP-IDEM-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.9,
+        "clarify_quality": 0.7
+      },
+      "live_notes": "轨迹整体顺畅，但澄清环节未在记录中体现具体追问内容，且最终回复过于笼统。",
+      "delta_plan": 0.1,
+      "delta_clarify": 0.1
+    },
+    {
+      "case_id": "TP-RECOV-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 0.3999999999999999,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.5,
+        "clarify_quality": 0.3
+      },
+      "live_notes": "导航去国贸存在同名地点歧义，但轨迹未有效澄清且出现重复执行与恢复，效率与澄清质量均偏低。",
+      "delta_plan": 0.1,
+      "delta_clarify": 0.3
+    },
+    {
+      "case_id": "TP-RECALL-001",
+      "passed": true,
+      "via": "cli",
+      "det": {
+        "plan_efficiency": 1.0,
+        "clarify_quality": 0.6
+      },
+      "live": {
+        "plan_efficiency": 0.9,
+        "clarify_quality": 1.0
+      },
+      "live_notes": "轨迹覆盖导航与提醒创建，步骤完整无冗余；提醒创建需确认已走 human_confirm，但澄清节点未产生实际追问，整体合理。",
+      "delta_plan": 0.1,
+      "delta_clarify": 0.4
+    }
+  ],
+  "analysis": {
+    "n": 12,
+    "live_ok": 12,
+    "live_errors": [],
+    "mean_abs_delta_plan": 0.233,
+    "mean_abs_delta_clarify": 0.3,
+    "live_stricter": [
+      "TP-AMBIG-001",
+      "TP-LOWCONF-001",
+      "TP-CLARIFY-002"
+    ],
+    "det_stricter": [
+      "TP-ROUTE-001",
+      "TP-MEM-003",
+      "TP-IDEM-001",
+      "TP-RECALL-001"
+    ]
+  }
+}
