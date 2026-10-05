@@ -1,0 +1,399 @@
+{
+  "fixture": {
+    "tp": 10,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "per_rule": {
+      "记住型+我喜欢型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "记住型+以后都型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "以后都型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "我喜欢型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "称呼型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "别/不要型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "记住型+住址型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "住址型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "记住型+电话型+裸号码": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      },
+      "生日型": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "n": 1
+      }
+    },
+    "rows": [
+      {
+        "text": "记住我喜欢坐地铁",
+        "rule": "记住型+我喜欢型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "我喜欢坐地铁"
+        ]
+      },
+      {
+        "text": "请记住我以后都走高速",
+        "rule": "记住型+以后都型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "我以后都走高速"
+        ]
+      },
+      {
+        "text": "以后都导航走北五环",
+        "rule": "以后都型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "导航走北五环"
+        ]
+      },
+      {
+        "text": "我不喜欢走高速",
+        "rule": "我喜欢型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "我不喜欢走高速"
+        ]
+      },
+      {
+        "text": "叫我 Jeremy",
+        "rule": "称呼型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "Jeremy"
+        ]
+      },
+      {
+        "text": "以后别给我放广告",
+        "rule": "别/不要型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "以后别给我放广告"
+        ]
+      },
+      {
+        "text": "记住我家住在望京XX小区1号楼",
+        "rule": "记住型+住址型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "我家住在望京XX小区1号楼"
+        ]
+      },
+      {
+        "text": "我家在朝阳区XX路",
+        "rule": "住址型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "朝阳区XX路"
+        ]
+      },
+      {
+        "text": "记住我的电话是13812345678",
+        "rule": "记住型+电话型+裸号码",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "我的电话是13812345678"
+        ]
+      },
+      {
+        "text": "我生日是11月20日",
+        "rule": "生日型",
+        "expect_n": 1,
+        "got_n": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 0,
+        "got": [
+          "11月20日"
+        ]
+      },
+      {
+        "text": "帮我查一下天气",
+        "rule": "无",
+        "expect_n": 0,
+        "got_n": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "got": []
+      },
+      {
+        "text": "导航去三里屯",
+        "rule": "无",
+        "expect_n": 0,
+        "got_n": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "got": []
+      },
+      {
+        "text": "带我去机场",
+        "rule": "无",
+        "expect_n": 0,
+        "got_n": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "got": []
+      },
+      {
+        "text": "查一下明天北京的天气怎么样",
+        "rule": "无",
+        "expect_n": 0,
+        "got_n": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "got": []
+      },
+      {
+        "text": "记住这个",
+        "rule": "无",
+        "expect_n": 0,
+        "got_n": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "got": []
+      },
+      {
+        "text": "",
+        "rule": "无",
+        "expect_n": 0,
+        "got_n": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "got": []
+      }
+    ]
+  },
+  "probes": [
+    {
+      "text": "别走这条路",
+      "should_extract": false,
+      "note": "一次性导航指令：最典型的'别'误抽场景",
+      "got": [
+        "别走这条路"
+      ],
+      "confidences": [
+        0.65
+      ],
+      "verdict": "误判"
+    },
+    {
+      "text": "今天堵车，以后别走这条路",
+      "should_extract": false,
+      "note": "分句里的一次性指令",
+      "got": [
+        "以后别走这条路"
+      ],
+      "confidences": [
+        0.65
+      ],
+      "verdict": "误判"
+    },
+    {
+      "text": "别急，慢慢来",
+      "should_extract": false,
+      "note": "安慰语，不是偏好",
+      "got": [
+        "别急"
+      ],
+      "confidences": [
+        0.65
+      ],
+      "verdict": "误判"
+    },
+    {
+      "text": "不要急",
+      "should_extract": false,
+      "note": "安慰语，'不要'触发",
+      "got": [
+        "不要急"
+      ],
+      "confidences": [
+        0.65
+      ],
+      "verdict": "误判"
+    },
+    {
+      "text": "以后别再给我放广告了",
+      "should_extract": true,
+      "note": "真·稳定禁忌：'别再'句式",
+      "got": [
+        "以后别再给我放广告了"
+      ],
+      "confidences": [
+        0.65
+      ],
+      "verdict": "OK"
+    },
+    {
+      "text": "我喜欢今天的歌单",
+      "should_extract": false,
+      "note": "当下一时情绪 vs 稳定偏好",
+      "got": [
+        "我喜欢今天的歌单"
+      ],
+      "confidences": [
+        0.75
+      ],
+      "verdict": "误判"
+    },
+    {
+      "text": "我喜欢坐地铁",
+      "should_extract": true,
+      "note": "稳定偏好：应该抽到",
+      "got": [
+        "我喜欢坐地铁"
+      ],
+      "confidences": [
+        0.75
+      ],
+      "verdict": "OK"
+    },
+    {
+      "text": "我讨厌堵车",
+      "should_extract": true,
+      "note": "稳定厌恶：应该抽到",
+      "got": [
+        "我讨厌堵车"
+      ],
+      "confidences": [
+        0.75
+      ],
+      "verdict": "OK"
+    },
+    {
+      "text": "叫我一声哥听听",
+      "should_extract": false,
+      "note": "玩笑称呼：'叫我'误抽",
+      "got": [
+        "一声哥听听"
+      ],
+      "confidences": [
+        0.85
+      ],
+      "verdict": "误判"
+    },
+    {
+      "text": "他让我记住明天开会",
+      "should_extract": false,
+      "note": "复述别人的指令：'记住'误抽",
+      "got": [
+        "明天开会"
+      ],
+      "confidences": [
+        0.9
+      ],
+      "verdict": "误判"
+    },
+    {
+      "text": "记住我家地址是望京XX小区",
+      "should_extract": true,
+      "note": "PII：必须抽到且标 sensitive",
+      "got": [
+        "我家地址是望京XX小区"
+      ],
+      "confidences": [
+        0.9
+      ],
+      "verdict": "OK"
+    },
+    {
+      "text": "以后都走这条路",
+      "should_extract": true,
+      "note": "持久标记：路线偏好",
+      "got": [
+        "走这条路"
+      ],
+      "confidences": [
+        0.8
+      ],
+      "verdict": "OK"
+    }
+  ]
+}

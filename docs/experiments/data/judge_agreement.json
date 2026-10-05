@@ -1,0 +1,311 @@
+{
+  "real_cases": [
+    {
+      "case_id": "TP-ROUTE-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "human_confirm",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-AMBIG-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 1.0
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=1.00（歧义已解决）"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-LOWCONF-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 1.0
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=1.00（歧义已解决）"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-DRIVE-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-MEM-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 0.3999999999999999,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=0.40（重复节点3次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture",
+        "human_confirm",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-MEM-002",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-MEM-003",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture",
+        "human_confirm"
+      ]
+    },
+    {
+      "case_id": "TP-CLARIFY-002",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 1.0
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=1.00（歧义已解决）"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-DRIVE-002",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-IDEM-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "human_confirm",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-RECOV-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 0.3999999999999999,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=0.40（重复节点3次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "tool_executor",
+        "verifier",
+        "memory_capture",
+        "recovery",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    },
+    {
+      "case_id": "TP-RECALL-001",
+      "passed": true,
+      "judge": {
+        "dimensions": {
+          "plan_efficiency": 1.0,
+          "clarify_quality": 0.6
+        },
+        "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.60（触发了澄清但未确认问法质量（需人工/LLM 复核））"
+      },
+      "visited_nodes": [
+        "intent",
+        "memory_recall",
+        "clarify",
+        "planner",
+        "policy_gate",
+        "human_confirm",
+        "tool_executor",
+        "verifier",
+        "memory_capture"
+      ]
+    }
+  ],
+  "synthetic_probes": [
+    {
+      "name": "planner 兜圈 3 次（规划绕路）",
+      "plan_efficiency": 0.6,
+      "clarify_quality": 1.0,
+      "notes": "plan_efficiency=0.60（重复节点2次，越界工具无）；clarify_quality=1.00（无需澄清）"
+    },
+    {
+      "name": "调了用例允许范围外的工具",
+      "plan_efficiency": 0.5,
+      "clarify_quality": 1.0,
+      "notes": "plan_efficiency=0.50（重复节点0次，越界工具['reminder.create']）；clarify_quality=1.00（无需澄清）"
+    },
+    {
+      "name": "走了 clarify 但一句追问都没说出来",
+      "plan_efficiency": 1.0,
+      "clarify_quality": 0.3,
+      "notes": "plan_efficiency=1.00（重复节点0次，越界工具无）；clarify_quality=0.30（澄清节点执行但无有效追问）"
+    }
+  ],
+  "live_judge": {
+    "available": false,
+    "reason": "live 测试 pending，需用户开通 DeepSeek API key：设置环境变量 TRIPPILOT_JUDGE_API_KEY 后再跑。"
+  },
+  "analysis": {
+    "n": 12,
+    "rule_pass": 12,
+    "judge_bad_but_rule_pass": [
+      "TP-ROUTE-001",
+      "TP-DRIVE-001",
+      "TP-MEM-001",
+      "TP-MEM-002",
+      "TP-MEM-003",
+      "TP-DRIVE-002",
+      "TP-IDEM-001",
+      "TP-RECOV-001",
+      "TP-RECALL-001"
+    ],
+    "judge_fully_uninformative_ids": [
+      "TP-AMBIG-001",
+      "TP-LOWCONF-001",
+      "TP-CLARIFY-002"
+    ]
+  }
+}
