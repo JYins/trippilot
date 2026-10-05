@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from .graph import build_graph, new_state, run_graph
 from .llm import make_llm
+from .memory.store import DEFAULT_PATH, PreferenceStore
 from .state import ASRResult
 
 log = logging.getLogger("trippilot.api")
@@ -27,7 +28,8 @@ _graph = None
 def get_graph():
     global _graph
     if _graph is None:
-        _graph = build_graph(make_llm())
+        _graph = build_graph(make_llm(),
+                             memory_store=PreferenceStore(DEFAULT_PATH))
     return _graph
 
 
@@ -36,7 +38,8 @@ def get_graph():
 # ---------------------------------------------------------------------------
 
 _SENSITIVE_KEYS = {"home_address", "exact_address", "contact", "phone",
-                   "reminder_content", "calendar_body"}
+                   "reminder_content", "calendar_body",
+                   "content"}  # 记忆偏好正文（可能含家庭住址），日志里脱敏
 
 
 def _redact(obj: Any) -> Any:
@@ -64,6 +67,7 @@ class TurnRequest(BaseModel):
     trip_context: dict[str, Any] = {}
     confirm: bool = False               # 用户确认（human_confirm 回填）
     clarify_answer: str = ""            # 用户澄清回答回填
+    pending_memory_confirms: list[dict[str, Any]] = []  # 上一轮挂起的敏感偏好，客户端原样回传
 
 
 class TurnResponse(BaseModel):
@@ -75,6 +79,7 @@ class TurnResponse(BaseModel):
     visited_nodes: list[str]
     policy_decisions: list[dict[str, Any]]
     verification: dict[str, Any]
+    pending_memory_confirms: list[dict[str, Any]]  # 本轮挂起的敏感偏好，客户端下轮回传
 
 
 @app.post("/turn", response_model=TurnResponse)
@@ -96,6 +101,7 @@ def turn(req: TurnRequest) -> TurnResponse:
                       asr_result=asr,
                       vehicle_state=req.vehicle_state,  # type: ignore
                       trip_context=ctx,
+                      pending_memory_confirms=req.pending_memory_confirms,
                       user_attributes={"user_id": "owner", "authenticated": True,
                                        "role": "owner"})
     out = run_graph(get_graph(), state)
@@ -107,7 +113,8 @@ def turn(req: TurnRequest) -> TurnResponse:
         needs_user_input=needs_input,
         visited_nodes=out.visited_nodes,
         policy_decisions=[d.model_dump() for d in out.policy_decisions],
-        verification=out.verification_result)
+        verification=out.verification_result,
+        pending_memory_confirms=out.pending_memory_confirms)
     log.info("turn response: %s", _redact(resp.model_dump()))
     return resp
 

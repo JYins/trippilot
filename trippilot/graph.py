@@ -1,11 +1,14 @@
 """LangGraph Orchestrator。
 
-节点流：intent → clarify → planner → policy_gate → human_confirm
-        → tool_executor → verifier → (recovery | 结束)
+节点流：intent → memory_recall → clarify → planner → policy_gate
+        → human_confirm → tool_executor → verifier → memory_capture
+        → (recovery | human_confirm | 结束)
 
 - Policy Gate 的 deny / confirm 直接决定路由，不经过模型"商量"。
 - 轨迹为 append-only：每个节点追加 TraceEvent 与 visited_nodes。
 - 失败时诚实降级：verifier 明确标记失败，不声称已完成。
+- 记忆写入走 Memory Gate：sensitive 偏好挂起后经现有 human_confirm
+  确认才写，不另起确认机制；human_confirm 事件先于实际写入（eval 回归）。
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 
 from .llm import LLMClient, DeterministicStub
+from .memory.store import MemoryRejected, PreferenceStore
 from .policy_gate import check_tool_call, scan_tool_text
 from .state import (ASRResult, PlanStep, PolicyDecision, ToolCall, ToolResult,
                     TraceEvent, TripPilotState)
@@ -30,7 +34,51 @@ def _trace(state: TripPilotState, node: str, event: str,
             "visited_nodes": [*state.visited_nodes, node]}
 
 
-def build_graph(llm: LLMClient | None = None) -> Any:
+def _insert_candidate(store: PreferenceStore, uid: str,
+                      cand: dict[str, Any]) -> str:
+    """Gate 已通过（或上一轮已判 confirm 且用户已确认）后的直接写盘。"""
+    return store._insert(
+        uid, cand["content"], cand.get("kind", "other"),
+        cand.get("sensitivity", "normal"), cand.get("source_type", "chat"))
+
+
+def _capture_candidate(store: PreferenceStore, uid: str,
+                       cand: dict[str, Any],
+                       confirmed: bool) -> tuple[str, str | None]:
+    """处理单条记忆候选：返回 ("written", id) / ("pending", None)。
+
+    Gate 判 deny 时抛 MemoryRejected。Gate 判 confirm 且本轮已确认
+    （human_confirm 事件已在轨迹里）时直接 _insert：remember() 里
+    Gate 刚跑过一次，不重复跑。
+    """
+    status, mid = store.remember(
+        user_id=uid,
+        content=cand["content"],
+        kind=cand.get("kind", "other"),
+        sensitivity=cand.get("sensitivity", "normal"),
+        source_type=cand.get("source_type", "chat"),
+        is_transient=cand.get("is_transient", False),
+    )
+    if status == "written":
+        return "written", mid
+    if confirmed:
+        return "written", _insert_candidate(store, uid, cand)
+    return "pending", None
+
+
+def _mark_pending(pending: list[dict[str, Any]],
+                   decisions: list[PolicyDecision],
+                   cand: dict[str, Any]) -> None:
+    """敏感候选挂起：记入 pending 并追加 confirm 决策（话术带内容）。"""
+    pending.append(cand)
+    decisions.append(PolicyDecision(
+        decision="confirm",
+        reason_code="sensitive_memory_needs_confirm",
+        detail=f"记住这条偏好吗？「{cand['content']}」（可随时删除）"))
+
+
+def build_graph(llm: LLMClient | None = None,
+              memory_store: PreferenceStore | None = None) -> Any:
     llm = llm or DeterministicStub()
     g = StateGraph(TripPilotState)
 
@@ -40,6 +88,23 @@ def build_graph(llm: LLMClient | None = None) -> Any:
         upd = _trace(state, "intent", "intent_extracted", {"text": text})
         upd["intent"] = text
         upd["user_request"] = text
+        return upd
+
+    # -- memory_recall ---------------------------------------------------
+    def memory_recall_node(state: TripPilotState) -> dict[str, Any]:
+        prefs: list[dict[str, Any]] = []
+        error = ""
+        if memory_store is not None:
+            try:
+                uid = state.user_attributes.get("user_id", "owner")
+                query = state.intent or state.user_request
+                prefs = [p.model_dump()
+                         for p in memory_store.recall(uid, query, top_k=3)]
+            except Exception as e:  # 记忆失败不拦主流程，记进 trace 诚实暴露
+                error = f"{type(e).__name__}: {e}"
+        upd = _trace(state, "memory_recall", "preferences_recalled",
+                     {"count": len(prefs), "error": error})
+        upd["preferences"] = prefs
         return upd
 
     # -- clarify ---------------------------------------------------------
@@ -122,9 +187,9 @@ def build_graph(llm: LLMClient | None = None) -> Any:
             upd["confirmation_state"] = "pending"
             needs = [d.reason_code for d in state.policy_decisions
                      if d.decision == "confirm"]
-            upd["final_response"] = "需要你确认：" + "；".join(
-                d.detail for d in state.policy_decisions
-                if d.decision == "confirm") or "；".join(needs)
+            details = "；".join(d.detail for d in state.policy_decisions
+                                if d.decision == "confirm")
+            upd["final_response"] = "需要你确认：" + (details or "；".join(needs))
             upd["stop_after_confirm"] = True
         return upd
 
@@ -189,6 +254,58 @@ def build_graph(llm: LLMClient | None = None) -> Any:
                                      "；".join(failures))
         return upd
 
+    # -- memory_capture --------------------------------------------------
+    def memory_capture_node(state: TripPilotState) -> dict[str, Any]:
+        # 逐条过 Memory Gate 写偏好；sensitive 挂起，走现有 human_confirm。
+        # 已确认（confirmation_state == "confirmed"）时把挂起的一并写入，
+        # 保证 human_confirm 事件先于实际写入。
+        written: list[str] = []
+        rejected: list[str] = []
+        pending: list[dict[str, Any]] = []
+        decisions = list(state.policy_decisions)
+        confirmed = state.confirmation_state == "confirmed"
+        if memory_store is not None:
+            uid = state.user_attributes.get("user_id", "owner")
+            if confirmed:
+                # 上一轮 Gate 已判 confirm（能进 pending 的前提），现已确认：
+                # 直接 _insert，不重复跑 Gate；deny 的候选进不了 pending
+                for cand in state.pending_memory_confirms:
+                    written.append(_insert_candidate(memory_store, uid, cand))
+            else:
+                # 未确认：上一轮挂起的继续保留，重新走 human_confirm，不能静默丢
+                for cand in state.pending_memory_confirms:
+                    _mark_pending(pending, decisions, cand)
+            for cand in state.memory_candidates:
+                try:
+                    status, mid = _capture_candidate(
+                        memory_store, uid, cand, confirmed)
+                except MemoryRejected as e:
+                    rejected.append(e.reason_code)
+                    continue
+                if status == "written":
+                    written.append(mid or "")
+                else:
+                    _mark_pending(pending, decisions, cand)
+        event = ("memories_written" if written else
+                 "confirm_needed" if pending else "nothing_to_capture")
+        upd = _trace(state, "memory_capture", event,
+                     {"written": written, "rejected": rejected,
+                      "pending": len(pending)})
+        upd["policy_decisions"] = decisions
+        upd["memory_candidates"] = []
+        upd["pending_memory_confirms"] = pending
+        return upd
+
+    def _route_after_capture(s: TripPilotState) -> str:
+        # 挂起的敏感偏好 → 现有 human_confirm；否则沿用 verifier 的恢复逻辑
+        if s.pending_memory_confirms and s.confirmation_state != "confirmed":
+            return "confirm"
+        vr = s.verification_result or {}
+        if (not vr.get("ok") and s.recovery_count < 1
+                and any(not r.ok for r in s.tool_results)):
+            return "recover"
+        return "end"
+
     # -- recovery ----------------------------------------------------------
     def recovery_node(state: TripPilotState) -> dict[str, Any]:
         upd = _trace(state, "recovery", "retry_once",
@@ -208,16 +325,19 @@ def build_graph(llm: LLMClient | None = None) -> Any:
 
     # -- 组装 --------------------------------------------------------------
     g.add_node("intent", intent_node)
+    g.add_node("memory_recall", memory_recall_node)
     g.add_node("clarify", clarify_node)
     g.add_node("planner", planner_node)
     g.add_node("policy_gate", policy_gate_node)
     g.add_node("human_confirm", human_confirm_node)
     g.add_node("tool_executor", tool_executor_node)
     g.add_node("verifier", verifier_node)
+    g.add_node("memory_capture", memory_capture_node)
     g.add_node("recovery", recovery_node)
 
     g.set_entry_point("intent")
-    g.add_edge("intent", "clarify")
+    g.add_edge("intent", "memory_recall")
+    g.add_edge("memory_recall", "clarify")
     g.add_conditional_edges(
         "clarify",
         lambda s: "stop" if s.stop_after_clarify else "go",
@@ -232,14 +352,11 @@ def build_graph(llm: LLMClient | None = None) -> Any:
         lambda s: "stop" if s.stop_after_confirm else "go",
         {"stop": END, "go": "tool_executor"})
     g.add_edge("tool_executor", "verifier")
+    g.add_edge("verifier", "memory_capture")
     g.add_conditional_edges(
-        "verifier",
-        lambda s: ("recover"
-                   if (not s.verification_result.get("ok")
-                       and s.recovery_count < 1
-                       and any(not r.ok for r in s.tool_results))
-                   else "end"),
-        {"recover": "recovery", "end": END})
+        "memory_capture",
+        _route_after_capture,
+        {"confirm": "human_confirm", "recover": "recovery", "end": END})
     g.add_edge("recovery", "tool_executor")
 
     return g.compile()

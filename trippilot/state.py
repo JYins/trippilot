@@ -83,6 +83,10 @@ class TripPilotState(BaseModel):
     verification_result: dict[str, Any] = Field(default_factory=dict)
     recovery_count: int = 0
     memory_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    # memory_capture 挂起的敏感偏好：走现有 human_confirm 流程，确认后才写
+    pending_memory_confirms: list[dict[str, Any]] = Field(default_factory=list)
+    # memory_recall 召回的偏好（Preference.model_dump()），供 planner/回答参考
+    preferences: list[dict[str, Any]] = Field(default_factory=list)
     final_response: str = ""
     errors: list[str] = Field(default_factory=list)
     latency_breakdown: dict[str, float] = Field(default_factory=dict)

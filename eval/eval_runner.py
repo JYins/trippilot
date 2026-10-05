@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -21,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 
 from trippilot.graph import build_graph, new_state, run_graph
 from trippilot.llm import DeterministicStub, ScriptedLLM
+from trippilot.memory.store import PreferenceStore, hash_embedder
 from trippilot.state import ASRResult
 from trippilot.tools.tools import ReminderTool, TripLogTool
 
@@ -34,12 +36,35 @@ def load_dataset(path: Path) -> list[dict]:
     return cases
 
 
+def _memory_events_ok(trace, mem_store) -> bool:
+    """含记忆用例的轨迹断言：必须有 memory_recall 事件；
+    敏感写入（payload written）出现前，trace 里必须出现过 human_confirm。
+    顺序断言逻辑复用 tests/test_graph_memory.py。
+    """
+    if "memory_recall" not in [e.node for e in trace]:
+        return False
+    hc_idx = next((i for i, e in enumerate(trace)
+                   if e.node == "human_confirm"), None)
+    for i, e in enumerate(trace):
+        if e.node == "memory_capture" and e.payload.get("written"):
+            sensitive = any(
+                (p := mem_store.get(mid)) is not None
+                and p.sensitivity == "sensitive"
+                for mid in e.payload["written"])
+            if sensitive and (hc_idx is None or hc_idx >= i):
+                return False
+    return True
+
+
 def run_case(case: dict) -> dict:
     ReminderTool.reset()
     TripLogTool.reset()
     llm = (ScriptedLLM(case["scripted_plan"]) if "scripted_plan" in case
            else DeterministicStub())
-    graph = build_graph(llm)
+    mem_dir = tempfile.TemporaryDirectory()
+    mem_store = PreferenceStore(Path(mem_dir.name) / "qdrant",
+                               embed_fn=hash_embedder())
+    graph = build_graph(llm, memory_store=mem_store)
 
     asr_cfg = case.get("asr")
     asr = ASRResult(text=asr_cfg["text"], confidence=asr_cfg["confidence"],
@@ -51,6 +76,7 @@ def run_case(case: dict) -> dict:
                       vehicle_state=case["context"].get(
                           "vehicle_state", "parked_simulated"),
                       trip_context=case["context"],
+                      memory_candidates=case.get("memory_candidates", []),
                       user_attributes={"user_id": "owner",
                                        "authenticated": True, "role": "owner"})
     out = run_graph(graph, state)
@@ -80,9 +106,17 @@ def run_case(case: dict) -> dict:
     allowed = set(exp.get("allowed_tools", []))
     unexpected_tools = sorted(executed_tools - allowed)
 
+    memory_events_ok = True
+    if exp.get("expects_memory") or case.get("memory_candidates"):
+        memory_events_ok = _memory_events_ok(out.trace, mem_store)
+
     passed = (node_coverage == 1.0 and not forbidden_hit and confirm_ok
               and deny_ok and degrade_ok and not unexpected_tools
+              and memory_events_ok
               and out.verification_result.get("ok", False))
+
+    mem_store.close()
+    mem_dir.cleanup()
 
     return {
         "case_id": case["case_id"],
@@ -94,6 +128,7 @@ def run_case(case: dict) -> dict:
         "confirm_ok": confirm_ok,
         "deny_ok": deny_ok,
         "degrade_ok": degrade_ok,
+        "memory_events_ok": memory_events_ok,
         "policy_reasons": reasons,
         "verification": out.verification_result,
         "visited_nodes": visited,
@@ -121,7 +156,8 @@ def main() -> int:
         if not r["passed"]:
             print(f"       missing={r['missing_nodes']} "
                   f"confirm_ok={r['confirm_ok']} deny_ok={r['deny_ok']} "
-                  f"degrade_ok={r['degrade_ok']}")
+                  f"degrade_ok={r['degrade_ok']} "
+                  f"memory_events_ok={r['memory_events_ok']}")
             print(f"       visited={r['visited_nodes']}")
             print(f"       verification={r['verification']}")
     print("=" * 64)

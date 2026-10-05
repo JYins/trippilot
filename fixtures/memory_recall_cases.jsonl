@@ -1,0 +1,11 @@
+{"type": "seed", "tag": "home_airport", "kind": "place", "content": "常去地点：首都机场 T3", "sensitivity": "normal", "source_type": "chat"}
+{"type": "seed", "tag": "office", "kind": "place", "content": "公司地址：望京 SOHO", "sensitivity": "normal", "source_type": "chat"}
+{"type": "seed", "tag": "name", "kind": "label", "content": "称呼偏好：叫我 Jeremy", "sensitivity": "normal", "source_type": "chat"}
+{"type": "seed", "tag": "auth_reminder", "kind": "auth", "content": "允许自动创建提醒事项", "sensitivity": "normal", "source_type": "chat"}
+{"type": "seed", "tag": "park", "kind": "place", "content": "常去地点：朝阳公园", "sensitivity": "normal", "source_type": "chat"}
+{"type": "query", "text": "送我去公司", "expect_tag": "office", "top_k": 3}
+{"type": "query", "text": "去机场", "expect_tag": "home_airport", "top_k": 3}
+{"type": "query", "text": "叫我什么", "expect_tag": "name", "top_k": 3}
+{"type": "seed", "tag": "quiet_home", "kind": "other", "content": "在家喜欢安静环境工作", "sensitivity": "normal", "source_type": "chat"}
+{"type": "seed", "tag": "quiet_cafe", "kind": "place", "content": "喜欢安静的咖啡馆办公", "sensitivity": "normal", "source_type": "chat"}
+{"type": "query", "text": "闹市区太吵，想找个清静地儿写代码", "expect_tag": "quiet_home", "top_k": 3, "kind": "other", "semantic_only": true}
