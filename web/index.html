@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TripPilot 途行智驾 · 原型控制台</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", sans-serif; max-width: 720px;
+         margin: 0 auto; padding: 20px; background: #f5f5f7; }
+  h1 { font-size: 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; margin: 12px 0;
+          box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  #log { white-space: pre-wrap; font-size: 14px; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  input[type=text] { flex: 1; padding: 10px; border-radius: 8px;
+                     border: 1px solid #ddd; font-size: 15px; }
+  button { padding: 10px 18px; border-radius: 8px; border: none; font-size: 15px;
+           background: #007aff; color: #fff; cursor: pointer; }
+  button.ghost { background: #e9e9ee; color: #111; }
+  .trace { font-size: 12px; color: #666; margin-top: 8px; }
+  .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+           background:#e8f5e9; color:#2e7d32; margin-right:6px;}
+  .badge.sim { background:#fff3e0; color:#e65100; }
+</style>
+</head>
+<body>
+<h1>🚗 TripPilot 途行智驾 <span class="badge sim">SIMULATED 车况为软件模拟</span></h1>
+
+<div class="card">
+  <div class="row">
+    <input id="q" type="text" placeholder="说句话，比如：明天下午两点去中关村面试，帮我查路线并提醒我">
+    <button onclick="send()">发送</button>
+  </div>
+  <div class="row">
+    <button class="ghost" onclick="confirm(true)">✅ 确认执行</button>
+    <button class="ghost" onclick="setDriving()">🚗 模拟行驶态</button>
+    <button class="ghost" onclick="setParked()">🅿️ 模拟驻车态</button>
+  </div>
+</div>
+
+<div class="card" id="confirmCard" style="display:none">
+  <b>需要你确认</b><div id="confirmText"></div>
+</div>
+
+<div class="card"><div id="log">等待输入…</div><div class="trace" id="trace"></div></div>
+
+<script>
+let session = null;
+let vehicle = "parked_simulated";
+const log = (t) => document.getElementById('log').innerText = t;
+const trace = (t) => document.getElementById('trace').innerText = t;
+
+async function send(text, extra={}) {
+  const q = text ?? document.getElementById('q').value;
+  if (!q && !extra.confirm) return;
+  log("处理中…");
+  const res = await fetch('/turn', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({session_id: session, text: q,
+                          vehicle_state: vehicle, ...extra})
+  });
+  const r = await res.json();
+  session = r.session_id;
+  log(r.final_response);
+  trace("轨迹: " + r.visited_nodes.join(" → ") +
+        "\n策略: " + r.policy_decisions.map(d => d.decision + "(" + d.reason_code + ")").join(", ") +
+        "\n确认态: " + r.confirmation_state + "  trace_id: " + r.trace_id);
+  const cc = document.getElementById('confirmCard');
+  if (r.needs_user_input) {
+    document.getElementById('confirmText').innerText = r.final_response;
+    cc.style.display = 'block';
+  } else { cc.style.display = 'none'; }
+}
+function confirm(v){ send("", {confirm: v}); document.getElementById('confirmCard').style.display='none'; }
+function setDriving(){ vehicle="driving_simulated"; log("已切换为模拟行驶态（软件模拟，非真实车况）"); }
+function setParked(){ vehicle="parked_simulated"; log("已切换为模拟驻车态"); }
+</script>
+</body>
+</html>

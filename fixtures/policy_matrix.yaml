@@ -1,0 +1,61 @@
+# TripPilot ABAC 策略表（policy_gate.py 的声明式版本，供评审与审计）
+# 判定逻辑以 trippilot/policy_gate.py 为准，本表用于对照检查。
+
+version: "0.1.0"
+
+rules:
+  - id: R1
+    when: {authenticated: false, action: read}
+    decision: allow
+    reason_code: guest_read_only
+  - id: R2
+    when: {authenticated: false, action: [create, update, delete, share]}
+    decision: deny
+    reason_code: unauthenticated_write
+  - id: R3
+    when: {role: [passenger, guest], resource: [calendar, memory], action: "!read"}
+    decision: deny
+    reason_code: role_not_permitted
+  - id: R4
+    when: {resource: calendar, action: [delete, update]}
+    decision: confirm
+    reason_code: calendar_mutation_needs_confirm
+    note: 无论车辆状态如何
+  - id: R5
+    when: {asr_confidence: "<0.6", action: [create, update, delete, share]}
+    decision: deny
+    reason_code: low_asr_confidence_blocks_side_effect
+    note: 先澄清，禁止产生副作用
+  - id: R6
+    when: {resource: reminder, action: create}
+    decision: confirm
+    reason_code: reminder_create_needs_confirm
+    note: 必须展示最终时间与内容
+  - id: R7
+    when: {vehicle_state: driving_simulated, action: read, option_count: ">2"}
+    decision: degrade
+    reason_code: driving_degrade_options
+    note: 降级为最多两个简短选项；vehicle_state 为纯软件模拟
+  - id: R8
+    when: {action: share}
+    decision: confirm
+    reason_code: share_needs_confirm
+  - id: R9
+    when: {tool: [map.route, map.search], place_ambiguous: true}
+    decision: confirm
+    reason_code: place_ambiguity_requires_clarify
+    note: 禁止猜测后直接执行，强制澄清
+
+memory_gate:
+  - when: {is_transient: true}
+    decision: deny
+    reason_code: transient_memory_rejected
+  - when: {sensitivity: sensitive}
+    decision: confirm
+    reason_code: sensitive_memory_needs_confirm
+  - when: {}
+    decision: allow
+    reason_code: stable_preference_write
+
+tool_text_injection:
+  action: 工具返回文本命中注入模式 → 该次工具结果记为失败并拦截，不进入系统指令
