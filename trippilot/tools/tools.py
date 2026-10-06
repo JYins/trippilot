@@ -93,6 +93,7 @@ class ReminderTool(BaseTool):
     supported_operations = {"reminder.create", "reminder.delete"}
     _store: dict[str, dict[str, Any]] = {}
     _idempotency: dict[str, str] = {}
+    _next_id: int = 1
 
     def schema(self) -> dict[str, Any]:
         return {
@@ -129,7 +130,9 @@ class ReminderTool(BaseTool):
             rid = self._idempotency[key]
             return ToolResult(tool=call.tool, ok=True, source="recorded",
                               data={"reminder_id": rid, "duplicate_suppressed": True})
-        rid = f"rmd_{len(self._store) + 1:04d}"
+        cls = type(self)
+        rid = f"rmd_{cls._next_id:04d}"
+        cls._next_id += 1
         self._store[rid] = {"id": rid, "content": content, "time": time,
                             "idempotency_key": key}
         self._idempotency[key] = rid
@@ -140,6 +143,10 @@ class ReminderTool(BaseTool):
         rid = call.args.get("reminder_id", "")
         if rid in self._store:
             del self._store[rid]
+            stale_keys = [key for key, saved_id in self._idempotency.items()
+                          if saved_id == rid]
+            for key in stale_keys:
+                del self._idempotency[key]
             return ToolResult(tool=call.tool, ok=True, source="recorded",
                               data={"deleted": rid})
         return ToolResult(tool=call.tool, ok=False, source="recorded",
@@ -149,6 +156,7 @@ class ReminderTool(BaseTool):
     def reset(cls) -> None:
         cls._store = {}
         cls._idempotency = {}
+        cls._next_id = 1
 
 
 # ---------------------------------------------------------------------------

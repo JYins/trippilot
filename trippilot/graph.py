@@ -395,17 +395,32 @@ def build_graph(llm: LLMClient | None = None,
 
     # -- recovery ----------------------------------------------------------
     def recovery_node(state: TripPilotState) -> dict[str, Any]:
-        upd = _trace(state, "recovery", "retry_once",
-                     {"recovery_count": state.recovery_count + 1})
         # 仅重试失败的工具调用；reminder 幂等键防止重复副作用
-        failed = [c.tool for c, r in
-                  zip(state.tool_calls[-len(state.tool_results):],
-                      state.tool_results) if not r.ok]
-        upd["pending_tool_calls"] = [
-            ToolCall(tool=t,
-                     args={"fixture": "default",
-                           "session_id": state.session_id},
-                     source="recorded") for t in failed]
+        result_count = len(state.tool_results)
+        recent_calls = (state.tool_calls[-result_count:]
+                        if result_count else [])
+        retries: list[ToolCall] = []
+        changes: list[dict[str, Any]] = []
+        fixture_fallback_tools = {
+            "map.route", "map.search", "weather.now", "weather.forecast",
+        }
+        for call, result in zip(recent_calls, state.tool_results):
+            if result.ok:
+                continue
+            args = dict(call.args)
+            if call.tool in fixture_fallback_tools and "fixture" in args:
+                before = args["fixture"]
+                if before != "default":
+                    args["fixture"] = "default"
+                    changes.append({"tool": call.tool,
+                                    "parameter": "fixture",
+                                    "from": before, "to": "default"})
+            retries.append(ToolCall(tool=call.tool, args=args,
+                                    source=call.source))
+        upd = _trace(state, "recovery", "retry_once",
+                     {"recovery_count": state.recovery_count + 1,
+                      "changes": changes})
+        upd["pending_tool_calls"] = retries
         upd["recovery_count"] = state.recovery_count + 1
         upd["tool_results"] = []
         return upd

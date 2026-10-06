@@ -50,8 +50,8 @@ def test_unknown_tool_name_is_denied_by_default():
 def test_driving_map_route_executes_with_degraded_option_count():
     graph = build_graph(DeterministicStub())
     state = new_state(
-        user_request="查去国贸的路线，给我三个方案",
-        trip_context={"destination": "国贸", "option_count": 3},
+        user_request="查去中关村的路线，给我三个方案",
+        trip_context={"destination": "中关村", "option_count": 3},
         vehicle_state="driving_simulated",
         user_attributes={"user_id": "owner", "authenticated": True,
                          "role": "owner"},

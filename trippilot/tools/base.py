@@ -48,6 +48,24 @@ class BaseTool:
         except json.JSONDecodeError as e:
             return ToolResult(tool=self.name, ok=False, source="recorded",
                               error=f"bad fixture json: {e}")
+        expected = data.pop("expect", None)
+        if expected is not None and not isinstance(expected, dict):
+            return ToolResult(tool=self.name, ok=False, source="recorded",
+                              error=f"bad fixture expect: {path.name}")
+        for field, wanted in (expected or {}).items():
+            actual = call.args.get(field)
+            # 只校验调用方实际给出的字段：没传（缺失/空）的不判，
+            # 传了但和录制数据对不上的才算 mismatch（如"去国贸"拿到"中关村"路线）
+            if actual is None or actual == "":
+                continue
+            if actual != wanted:
+                return ToolResult(
+                    tool=self.name,
+                    ok=False,
+                    source="recorded",
+                    error=(f"recorded fixture parameter mismatch: {field} "
+                           f"expected {wanted!r}, got {actual!r}"),
+                )
         return ToolResult(tool=self.name, ok=True, data=data, source="recorded")
 
     # -- live (manual only) ------------------------------------------------
