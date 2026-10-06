@@ -122,11 +122,12 @@ def _reminder_created(out, _store, _case) -> bool:
 
 
 def _transient_rejected(out, _store, _case) -> bool:
+    # 一次性内容必须被明确拒绝（rejected 里带 transient 原因），
+    # 不能只靠"没写入"蒙混——没走到记忆节点和被拒是两回事
     events = _memory_events(out.trace)
     return any("transient" in reason
                for event in events
-               for reason in event.payload.get("rejected", [])) or (
-                   bool(events) and not _written_ids(out.trace))
+               for reason in event.payload.get("rejected", []))
 
 
 def _stable_preference_written(out, store, _case) -> bool:
@@ -135,7 +136,10 @@ def _stable_preference_written(out, store, _case) -> bool:
                for mid in _written_ids(out.trace))
 
 
-def _memory_not_written(out, _store, _case) -> bool:
+def _no_memory_written(out, _store, _case) -> bool:
+    """memory_written=False 时的断言：确实没有写入。名字按"断言内容"取，
+    不叫 _memory_written 是为了避免和 criterion key 同名造成"到底断言了
+    什么"的误读（reviewer B 指出过双重否定问题）。"""
     events = _memory_events(out.trace)
     return bool(events) and not events[-1].payload.get("written", [])
 
@@ -200,7 +204,7 @@ CRITERION_CHECKS: dict[str, CriterionCheck] = {
     "reminder_created": _reminder_created,
     "transient_rejected": _transient_rejected,
     "stable_preference_written": _stable_preference_written,
-    "memory_written": _memory_not_written,
+    "memory_written": _no_memory_written,
     "sensitive_pending_confirm": _sensitive_pending,
     "duplicate_suppressed": _duplicate_suppressed,
     "tool_failed_then_recovered": _failed_then_recovered,

@@ -67,6 +67,19 @@ class BaseTool:
                 )
         return ToolResult(tool=self.name, ok=True, data=data, source="recorded")
 
+    # -- live (manual only) ------------------------------------------------
+    def _run_live(self, call: ToolCall) -> ToolResult:
+        raise ToolError(f"{self.name}: live_manual 未实现或 key 未提供（手动触发专用）")
+
+    @staticmethod
+    def _temp_key(env_name: str) -> str:
+        """只从本次进程环境读取临时 key；绝不写入文件。"""
+        key = os.environ.get(env_name, "")
+        if not key:
+            raise ToolError(f"live_manual 需要临时环境变量 {env_name}（用后即删，不保存）")
+        return key
+
+
 def fixture_key_for(tool_name: str, args: dict[str, Any]) -> str:
     """按调用参数找 expect 最匹配的录制 fixture key，找不到回 default。
 
@@ -101,13 +114,3 @@ def fixture_key_for(tool_name: str, args: dict[str, Any]) -> str:
         if ok and score > best_score and score > 0:
             best, best_score = path.stem[len(prefix):], score
     return best
-    def _run_live(self, call: ToolCall) -> ToolResult:
-        raise ToolError(f"{self.name}: live_manual 未实现或 key 未提供（手动触发专用）")
-
-    @staticmethod
-    def _temp_key(env_name: str) -> str:
-        """只从本次进程环境读取临时 key；绝不写入文件。"""
-        key = os.environ.get(env_name, "")
-        if not key:
-            raise ToolError(f"live_manual 需要临时环境变量 {env_name}（用后即删，不保存）")
-        return key

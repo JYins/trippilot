@@ -34,3 +34,29 @@
 改法：recovery 不再硬编码 default，而是按调用参数（目的地）在 fixtures/recorded 里找 expect 最匹配的 key（`tools/base.py::fixture_key_for`），找不到才回 default。代价是 recovery 多了一次目录扫描（录制文件数量级很小，可接受），以及 fixture 文件的 expect 段从此有了第二处读者（base._run_recorded 和 fixture_key_for），改 expect 格式时两处要一起看。
 
 另外 #11 的校验放宽了一点：只校验调用方实际传了的字段。DeterministicStub 给 map.route 传 origin=""（context 里没有时），空值不判——否则所有没起点的用例全挂。传了但对不上的（如"去国贸"拿"中关村"路线）照样明确失败，审查要的"参数与响应不一致就失败"还在。
+
+## 补记 2（20261006 晚）：澄清绑定放宽到"只约束地点歧义"
+
+4752370 里改了 clarify_node：只有 `asr.place_entities > 1`（真有地点歧义）时，才要求 clarify_answer 匹配某个地点选项；纯低置信度、无地点歧义时，用户的复述直接视为确认（`resolved = answer.strip()`）。这放宽了 20261006-recall-clarify-binding.md 定下的"任意非空回答都要绑定选项"规则，是行为变更，补记如下。
+
+### 背景
+
+eval 的 TP-LOWCONF-001："帮我删掉明天的面试日程"，ASR 置信度 0.4，无地点实体。按原规则，clarify_answer="明天"不匹配任何地点选项 → 一直追问 → 用例挂。原规则把"低置信度"和"地点歧义"混成了一件事。
+
+### 候选方案
+
+1. 保持原规则，给低置信度用例也配地点选项——削足适履，测试数据迁就实现。
+2. 只在真有地点歧义时要求选项绑定；纯低置信度时用户复述即确认——区分两种不确定性。
+3. 低置信度一律拒绝执行——最安全，但正常用户说句话含糊点就被拒，体验差。
+
+### 选择
+
+选 2。地点歧义（去"西站"还是"南站"）是"选错对象"的风险，必须由确定性程序绑定；纯低置信度（听不清但语义完整）是"听错内容"的风险，用户复述一遍"我说的就是明天"本身就是确认动作。
+
+### 为什么
+
+安全语义上，复述即确认并不打开新口子：澄清放行后，后面还有 policy_gate 对工具调用的授权检查（#3 的 TOOL_POLICIES 表），低置信 ASR 伪造不出越权调用。放弃的是"程序替用户做二次确认"的保守，但换来的是规则与风险对齐——评审员 B 指出这是安全语义变化，认：代价是低置信场景下误执行（如把"删明天"听成"删每天"）的概率略升，靠下游 verifier 和用户可撤销兜底。
+
+### 对 eval 的影响
+
+TP-LOWCONF-001 恢复通过（12/12）。tests/test_graph_recall_clarify.py 新增 `test_low_confidence_without_place_ambiguity_accepts_restatement` 锁定该行为。
