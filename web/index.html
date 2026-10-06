@@ -47,6 +47,7 @@
 <script>
 let session = null;
 let vehicle = "parked_simulated";
+let confirmNonce = null;
 const log = (t) => document.getElementById('log').innerText = t;
 const trace = (t) => document.getElementById('trace').innerText = t;
 
@@ -60,7 +61,12 @@ async function send(text, extra={}) {
                           vehicle_state: vehicle, ...extra})
   });
   const r = await res.json();
+  if (!res.ok) {
+    log(r.detail || "请求失败");
+    return;
+  }
   session = r.session_id;
+  confirmNonce = r.pending_memory_confirms[0]?.nonce ?? null;
   log(r.final_response);
   trace("轨迹: " + r.visited_nodes.join(" → ") +
         "\n策略: " + r.policy_decisions.map(d => d.decision + "(" + d.reason_code + ")").join(", ") +
@@ -71,7 +77,7 @@ async function send(text, extra={}) {
     cc.style.display = 'block';
   } else { cc.style.display = 'none'; }
 }
-function confirm(v){ send("", {confirm: v}); document.getElementById('confirmCard').style.display='none'; }
+function confirm(v){ send("", {confirm: v, confirm_nonce: confirmNonce}); document.getElementById('confirmCard').style.display='none'; }
 function setDriving(){ vehicle="driving_simulated"; log("已切换为模拟行驶态（软件模拟，非真实车况）"); }
 function setParked(){ vehicle="parked_simulated"; log("已切换为模拟驻车态"); }
 </script>
