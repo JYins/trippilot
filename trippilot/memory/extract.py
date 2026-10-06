@@ -40,8 +40,7 @@ def _is_junk(content: str) -> bool:
 
 
 def _upgrade_kind(content: str, kind: str) -> str:
-    """按内容关键词补 kind：触发词只定"句式"，地点/联系方式
-    从内容里认，避免"记住我家地址"被记成 other。"""
+    """触发词只定句式；具体类别仍以内容为准。"""
     if kind != "other":
         return kind
     if re.search(r"住址|我家|小区|公司|单位|学校|机场|停车场|商场", content):
@@ -140,14 +139,7 @@ _RULES = [
 
 def extract_candidates(text: str, context: dict[str, Any] | None = None
                        ) -> list[dict[str, Any]]:
-    """从一句话里抽取记忆候选，返回按置信度降序的候选列表。
-
-    text: 用户本轮说话内容（ASR 文本或直接输入）。
-    context: 调用上下文（user_id / session_id），当前规则用不到，
-        留给未来规则（如多轮指代消解）用。
-    每条候选：content / kind / sensitivity / confidence /
-        source_type="extracted"。
-    """
+    """返回按置信度降序的候选；context 预留给多轮规则。"""
     text = (text or "").strip()
     if not text:
         return []
