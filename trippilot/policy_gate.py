@@ -13,15 +13,15 @@ from typing import Any
 
 from .state import PolicyDecision
 
-# ---------------------------------------------------------------------------
-# 常量：动作与资源
-# ---------------------------------------------------------------------------
-
-READ_ONLY_TOOLS = {"map.route", "map.search", "weather.now", "weather.forecast"}
-SIDE_EFFECT_TOOLS = {"reminder.create", "reminder.update", "reminder.delete",
-                     "calendar.create", "calendar.update", "calendar.delete",
-                     "memory.write"}
-CONFIRM_ALWAYS = {"calendar.delete", "calendar.update", "reminder.delete"}
+TOOL_POLICIES = {
+    "map.route": ("route", "read"),
+    "map.search": ("route", "read"),
+    "weather.now": ("weather", "read"),
+    "weather.forecast": ("weather", "read"),
+    "reminder.create": ("reminder", "create"),
+    "reminder.delete": ("reminder", "delete"),
+    "trip_log.append": ("trip_log", "create"),
+}
 
 # ASR 置信度阈值：地点/时间实体低于此值时，禁止产生副作用的调用
 LOW_CONFIDENCE_THRESHOLD = 0.6
@@ -117,6 +117,11 @@ def check_tool_call(tool_call: Any, state: Any) -> PolicyDecision:
     asr = state.asr_result
     asr_conf = asr.confidence if asr else 1.0
 
+    policy = TOOL_POLICIES.get(tool)
+    if policy is None:
+        return PolicyDecision(decision="deny", reason_code="unknown_tool",
+                              detail=f"未知工具操作: {tool}")
+
     subject = {"user_id": state.user_attributes.get("user_id", "owner"),
                "authenticated": state.user_attributes.get("authenticated", True),
                "role": state.user_attributes.get("role", "owner")}
@@ -133,23 +138,13 @@ def check_tool_call(tool_call: Any, state: Any) -> PolicyDecision:
                                   reason_code="place_ambiguity_requires_clarify",
                                   detail="地点存在歧义，禁止猜测后直接执行，先澄清")
 
-    resource = tool.split(".")[0]
-    action = _action_of(tool)
+    resource, action = policy
     parameters = dict(args)
     if tool in ("map.route", "map.search"):
         parameters["option_count"] = args.get("option_count", 1)
 
     return evaluate(subject=subject, resource=resource, action=action,
                     environment=environment, parameters=parameters)
-
-
-def _action_of(tool: str) -> str:
-    name = tool.split(".")[-1]
-    mapping = {"route": "read", "search": "read", "now": "read", "forecast": "read",
-               "create": "create", "update": "update", "delete": "delete",
-               "write": "create", "log": "create"}
-    return mapping.get(name, "read")
-
 
 # ---------------------------------------------------------------------------
 # 工具返回文本的 prompt-injection 检查
@@ -197,5 +192,5 @@ def evaluate_memory_candidate(candidate: dict[str, Any]) -> PolicyDecision:
 
 __all__ = [
     "evaluate", "check_tool_call", "scan_tool_text", "evaluate_memory_candidate",
-    "PolicyDecision", "LOW_CONFIDENCE_THRESHOLD",
+    "PolicyDecision", "LOW_CONFIDENCE_THRESHOLD", "TOOL_POLICIES",
 ]

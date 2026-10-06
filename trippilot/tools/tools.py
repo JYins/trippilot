@@ -15,6 +15,7 @@ from .base import BaseTool, ToolError
 
 class MapTool(BaseTool):
     name = "map"
+    supported_operations = {"map.route", "map.search"}
 
     def schema(self) -> dict[str, Any]:
         return {
@@ -33,6 +34,11 @@ class MapTool(BaseTool):
         self._temp_key("TRIPPILOT_AMAP_KEY_TEMP")
         raise ToolError("map live_manual：需在手动触发时接入具体路线规划接口（待实现）")
 
+    def _run_recorded(self, call: ToolCall) -> ToolResult:
+        if call.tool not in self.supported_operations:
+            return _unsupported_operation(call)
+        return super()._run_recorded(call)
+
 
 # ---------------------------------------------------------------------------
 # weather.now / weather.forecast
@@ -40,6 +46,7 @@ class MapTool(BaseTool):
 
 class WeatherTool(BaseTool):
     name = "weather"
+    supported_operations = {"weather.now", "weather.forecast"}
 
     def schema(self) -> dict[str, Any]:
         return {
@@ -47,6 +54,11 @@ class WeatherTool(BaseTool):
             "description": "查询指定区域当前天气（录制响应默认）",
             "parameters": {"area": "区域，如 海淀区", "fixture": "录制 fixture 名"},
         }
+
+    def _run_recorded(self, call: ToolCall) -> ToolResult:
+        if call.tool not in self.supported_operations:
+            return _unsupported_operation(call)
+        return super()._run_recorded(call)
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +73,7 @@ class ReminderTool(BaseTool):
     """
 
     name = "reminder"
+    supported_operations = {"reminder.create", "reminder.delete"}
     _store: dict[str, dict[str, Any]] = {}
     _idempotency: dict[str, str] = {}
 
@@ -81,12 +94,11 @@ class ReminderTool(BaseTool):
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
     def _run_recorded(self, call: ToolCall) -> ToolResult:
+        if call.tool not in self.supported_operations:
+            return _unsupported_operation(call)
         if call.tool == "reminder.create":
             return self._create(call)
-        if call.tool == "reminder.delete":
-            return self._delete(call)
-        return ToolResult(tool=call.tool, ok=False, source="recorded",
-                          error=f"unsupported op {call.tool}")
+        return self._delete(call)
 
     def _create(self, call: ToolCall) -> ToolResult:
         args = call.args
@@ -128,6 +140,7 @@ class ReminderTool(BaseTool):
 
 class TripLogTool(BaseTool):
     name = "trip_log"
+    supported_operations = {"trip_log.append"}
     _entries: list[dict[str, Any]] = []
 
     def schema(self) -> dict[str, Any]:
@@ -135,6 +148,8 @@ class TripLogTool(BaseTool):
                 "parameters": {"entry": "记录内容 dict"}}
 
     def _run_recorded(self, call: ToolCall) -> ToolResult:
+        if call.tool not in self.supported_operations:
+            return _unsupported_operation(call)
         self._entries.append(dict(call.args.get("entry", {})))
         return ToolResult(tool=call.tool, ok=True, source="recorded",
                           data={"logged": len(self._entries)})
@@ -142,6 +157,11 @@ class TripLogTool(BaseTool):
     @classmethod
     def reset(cls) -> None:
         cls._entries = []
+
+
+def _unsupported_operation(call: ToolCall) -> ToolResult:
+    return ToolResult(tool=call.tool, ok=False, source="recorded",
+                      error=f"unsupported operation: {call.tool}")
 
 
 TOOLS: dict[str, BaseTool] = {
