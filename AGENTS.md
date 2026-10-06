@@ -75,3 +75,20 @@ web/                  # 最小控制台，不搞前端工程
 - 车况（驻车/行驶）全部是**纯软件模拟**，README 和代码注释里不许暗示来自真车。
 - 地图/天气默认走 `fixtures/recorded/` 录制响应，不代表实时数据。
 - 无 key 时 LLM 是确定性 stub；简历和面试话术里的数字只能来自真实评测报告。
+
+## 7. 技术选型约束（简历对齐）
+
+**只用简历上的技术。** 面试官会按简历问，仓库里出现简历外的技术就是给自己挖坑。
+简历原文：`~/workspace/user/resume_2027_cn.tex`，"专业技能"节是唯一白名单来源。
+
+白名单映射（2026-10-06 按简历整理）：
+- Agent 编排：LangGraph ｜ 后端：FastAPI ｜ 向量库：Qdrant（偏好记忆）、FAISS（RAG 备选）
+- Embedding：BGE / sentence-transformers（简历：泰瑞数创 BGE 检索）
+- 本地模型：llama.cpp、Transformers、Qwen2.5 ｜ ASR：Whisper（Transformers）
+- 评测/工程：pytest、GitHub Actions ｜ 数据库：PostgreSQL/SQLite
+
+规则：
+- 白名单外的依赖不许直接引入。先写决策记录说清"简历上的为什么不行"，用户批准后才能用。
+- 已存在的偏离记为待整改项，排期换成白名单方案，不许"能用就行"。
+  当前已知偏离：`trippilot/memory/store.py` 默认 embedding 用 FastEmbed（简历外），
+  待换成 BGE（bge-small-zh-v1.5，中文场景本来就更合适）。
