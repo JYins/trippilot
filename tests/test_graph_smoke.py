@@ -47,3 +47,64 @@ def test_clarify_stops_without_answer():
     assert out.stop_after_clarify is True
     assert out.confirmation_state == "pending"
     assert out.tool_calls == []
+
+
+def test_clarify_question_names_options_not_codes():
+    """回归（2026-10-06）：无 clarify_answer 预置时，追问必须点名歧义选项。
+
+    之前直接把 place_ambiguity(...) 这类 reason code 拼进话术，用户听到
+    的是机器码；live judge 在 TP-AMBIG-001/TP-LOWCONF-001/TP-CLARIFY-002
+    的 clarify 维度给了低分。模板是确定性的，这个断言零 flaky。
+    """
+    from trippilot.state import ASRResult
+    graph = build_graph(DeterministicStub())
+    state = new_state(
+        user_request="导航去西站",
+        asr_result=ASRResult(text="导航去西站", confidence=0.9,
+                             place_entities=[{"name": "北京西站"},
+                                             {"name": "西站地铁站"}]),
+        trip_context={},
+        user_attributes={"user_id": "owner", "authenticated": True,
+                         "role": "owner"})
+    out = run_graph(graph, state)
+    assert out.stop_after_clarify is True
+    assert "北京西站" in out.final_response
+    assert "西站地铁站" in out.final_response
+    assert "place_ambiguity" not in out.final_response
+    assert "asr_low_confidence" not in out.final_response
+
+
+def test_clarify_low_confidence_wording_is_human():
+    """回归：单低置信度触发时，话术是人话，不带 code 也不报置信度数字。"""
+    from trippilot.state import ASRResult
+    graph = build_graph(DeterministicStub())
+    state = new_state(
+        user_request="帮我删掉明天的面试日程",
+        asr_result=ASRResult(text="帮我删掉明天的面试日程", confidence=0.4,
+                             place_entities=[]),
+        trip_context={},
+        user_attributes={"user_id": "owner", "authenticated": True,
+                         "role": "owner"})
+    out = run_graph(graph, state)
+    assert out.stop_after_clarify is True
+    assert "没太听清" in out.final_response
+    assert "asr_low_confidence" not in out.final_response
+    assert "0.40" not in out.final_response
+
+
+def test_clarify_single_place_low_conf_names_guess():
+    """回归：单地点 + 低置信度时，按"猜测确认"点名，不把猜测当事实。"""
+    from trippilot.state import ASRResult
+    graph = build_graph(DeterministicStub())
+    state = new_state(
+        user_request="导航去机场",
+        asr_result=ASRResult(text="导航去机场", confidence=0.58,
+                             place_entities=[{"name": "首都机场"}]),
+        trip_context={},
+        user_attributes={"user_id": "owner", "authenticated": True,
+                         "role": "owner"})
+    out = run_graph(graph, state)
+    assert out.stop_after_clarify is True
+    assert "首都机场" in out.final_response
+    assert "place_ambiguity" not in out.final_response
+    assert "asr_low_confidence" not in out.final_response

@@ -19,9 +19,6 @@ class LLMClient:
         """返回 plan steps：[{step_id, tool, args, description}]。"""
         raise NotImplementedError
 
-    def clarify_question(self, *, ambiguity: str) -> str:
-        raise NotImplementedError
-
     def final_answer(self, *, state_summary: dict[str, Any]) -> str:
         raise NotImplementedError
 
@@ -35,9 +32,6 @@ class ScriptedLLM(LLMClient):
     def plan(self, *, intent: str, context: dict[str, Any],
              available_tools: list[str]) -> list[dict[str, Any]]:
         return self._plan
-
-    def clarify_question(self, *, ambiguity: str) -> str:
-        return f"想确认一下：{ambiguity}，你指的是哪一个？"
 
     def final_answer(self, *, state_summary: dict[str, Any]) -> str:
         return "脚本执行完成。"
@@ -73,9 +67,6 @@ class DeterministicStub(LLMClient):
                                    "session_id": context.get("session_id", "")},
                           "description": "创建提醒"})
         return steps
-
-    def clarify_question(self, *, ambiguity: str) -> str:
-        return f"想确认一下：{ambiguity}，你指的是哪一个？"
 
     def final_answer(self, *, state_summary: dict[str, Any]) -> str:
         results = state_summary.get("tool_results", [])
@@ -119,10 +110,6 @@ class EnvLLMClient(LLMClient):
             f"可用工具：{available_tools}。不要编造工具名。",
             f"意图：{intent}\n上下文：{json.dumps(context, ensure_ascii=False)}")
         return json.loads(raw)
-
-    def clarify_question(self, *, ambiguity: str) -> str:
-        return self._chat("你是车载语音助手，用一句话向用户澄清歧义，简短口语化。",
-                          f"歧义：{ambiguity}")
 
     def final_answer(self, *, state_summary: dict[str, Any]) -> str:
         return self._chat("你是车载语音助手，根据工具执行结果给用户一句话总结，简短口语化。",

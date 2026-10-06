@@ -35,6 +35,31 @@ def _trace(state: TripPilotState, node: str, event: str,
             "visited_nodes": [*state.visited_nodes, node]}
 
 
+def _render_clarify_question(asr: ASRResult, low_conf: bool) -> str:
+    """追问话术：确定性模板，用户听到的必须是人话且点名选项。
+
+    reason code（如 place_ambiguity(...)）只进 trace，不进 final_response——
+    之前直接把 code 拼进话术，用户听到的是机器码，live judge 在
+    TP-AMBIG-001 等 3 条上给了低分（见 decisions/20251006-clarify-wording.md）。
+    low_conf 由调用方（clarify_node）判定后传入，阈值只留一处。
+    """
+    names = [p.get("name", "") for p in asr.place_entities if p.get("name")]
+    if len(names) > 1:
+        options = "、".join(f"「{n}」" for n in names)
+        question = f"你指的是{options}中的哪一个？"
+        return f"刚才没太听清，{question}" if low_conf else question
+    if len(names) == 1 and low_conf:
+        # 单个地点 + 没听清：按"猜测确认"问，不把猜测当事实；
+        # time entity 不点名——它从没产生过 reason code，没有"选项"可点，
+        # judge 想要也只是 advisory 层面的建议，不跟。
+        return f"刚才没太听清，你是说「{names[0]}」吗？"
+    if low_conf:
+        return "刚才没太听清，能再说一遍吗？"
+    # 兜底：need_clarify 为真时理论上走不到（必有其一），但模板不假设
+    # 调用方——以后加新歧义类型没配模板时，宁可问得笼统也不泄露 code。
+    return "没太确定你的意思，能再具体说一下吗？"
+
+
 def _insert_candidate(store: PreferenceStore, uid: str,
                       cand: dict[str, Any]) -> str:
     """Gate 已通过（或上一轮已判 confirm 且用户已确认）后的直接写盘。"""
@@ -113,8 +138,9 @@ def build_graph(llm: LLMClient | None = None,
         asr = state.asr_result
         need_clarify = False
         reasons: list[str] = []
+        low_conf = bool(asr and asr.confidence < 0.6)
         if asr:
-            if asr.confidence < 0.6:
+            if low_conf:
                 need_clarify = True
                 reasons.append(f"asr_low_confidence({asr.confidence:.2f})")
             if len(asr.place_entities) > 1:
@@ -127,8 +153,8 @@ def build_graph(llm: LLMClient | None = None,
                      {"need_clarify": need_clarify, "reasons": reasons})
         if need_clarify and not answer:
             upd["confirmation_state"] = "pending"
-            upd["final_response"] = llm.clarify_question(
-                ambiguity="；".join(reasons))
+            # 追问走确定性模板：reason code 只进 trace，用户听到人话
+            upd["final_response"] = _render_clarify_question(asr, low_conf)
             upd["stop_after_clarify"] = True  # 内部标记：等待用户回答
         elif answer:
             upd["trip_context"] = {**state.trip_context,
