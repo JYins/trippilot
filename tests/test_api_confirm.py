@@ -83,6 +83,25 @@ def test_confirmation_without_nonce_is_rejected(api_service):
     assert exc_info.value.detail == "确认请求缺少 confirm_nonce"
 
 
+def test_new_pending_does_not_drop_unconfirmed_ones(api_service):
+    # 回归：同 session 多轮未确认的候选，nonce 快照要合并保存，不能覆盖
+    first = _request_memory_confirm()
+    session_id = first["session_id"]
+    first_nonce = first["pending_memory_confirms"][0]["nonce"]
+
+    second = _turn(session_id=session_id, text="记住我家车牌是京A12345")
+    assert second["confirmation_state"] == "pending"
+    second_nonce = second["pending_memory_confirms"][0]["nonce"]
+    assert second_nonce != first_nonce
+
+    # 先确认第一轮的：快照还在，不会因第二轮被覆盖而失效
+    response = _turn(session_id=session_id, text="确认",
+                     confirm=True, confirm_nonce=first_nonce)
+    assert response["confirmation_state"] == "confirmed"
+    saved = api_service.recall("local", "望京XX小区")
+    assert saved and saved[0].content == "我家住在望京XX小区"
+
+
 def test_normal_confirmation_uses_server_snapshot(api_service):
     store = api_service
     pending = _request_memory_confirm()

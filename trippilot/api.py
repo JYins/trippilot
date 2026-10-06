@@ -160,7 +160,11 @@ def _save_pending_memory(session_id: str,
             content=content,
         ))
     with _pending_memory_lock:
-        _pending_memory_confirms[session_id] = saved
+        # 合并而非覆盖：同一 session 可能有多轮未确认的候选，
+        # 覆盖会让旧 nonce 的快照丢失、用户永远确认不了
+        existing = _pending_memory_confirms.get(session_id, {})
+        existing.update(saved)
+        _pending_memory_confirms[session_id] = existing
     return response_items
 
 
