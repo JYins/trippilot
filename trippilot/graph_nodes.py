@@ -218,7 +218,8 @@ def policy_gate_node(state: TripPilotState) -> dict[str, Any]:
 
 
 def memory_confirm_id(candidate: dict[str, Any]) -> str:
-    raw = f"{candidate.get('kind', 'other')}{candidate['content']}"
+    # kind 和 content 之间加 \x00 分隔，避免 "ab"+"c" 与 "a"+"bc" 碰撞
+    raw = f"{candidate.get('kind', 'other')}\x00{candidate['content']}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -437,6 +438,8 @@ def _write_memory_candidates(
             continue
         if status == "written":
             written.append(memory_id or "")
+            if confirmed:
+                written_confirm_ids.append(memory_confirm_id(candidate))
         else:
             _mark_pending(pending, decisions, candidate)
     return written, written_confirm_ids, rejected, pending, decisions

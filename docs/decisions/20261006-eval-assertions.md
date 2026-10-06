@@ -21,3 +21,9 @@
 ## 对 eval 的影响
 
 `success_criteria` 现在进入 pass/fail：创建提醒、瞬时内容拒绝、普通偏好写入、敏感候选挂起、幂等抑制、失败恢复、最终验证和精确写入条数均有确定性断言。未知 key 产生 `unknown success criterion` 失败。敏感记忆只有在相同 confirm ID 更早出现在已确认事件中，且写入事件声明同一 ID 时，`memory_events_ok` 才能通过；工具确认不再能冒充记忆确认。
+
+## 已知缺口（reviewer A 指出，20261006 晚补记）
+
+#14 修的是**审计**，不是**运行时语义**：一次工具确认会把 `confirmation_state` 置为 `"confirmed"`，同一 turn 内后续的敏感记忆会走 `_write_memory_candidates` 的 confirmed 分支直接写入，不再经过 human_confirm。这是 pre-existing 逻辑（#14 之前就这样），本 commit 没引入也没修。
+
+决策记录之前暗示"#14 修好了"，说法不精确，纠正：审计层面现在能抓到"没确认就写"（fail-closed），但运行时"一次确认管全场"的语义还在。彻底修要按确认类别隔离状态（工具确认 vs 记忆确认分开记），改动不小，留到下次动 confirmation_state 时一起做。这里先诚实记下，不装修好了。

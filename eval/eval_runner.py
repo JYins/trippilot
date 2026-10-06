@@ -53,8 +53,14 @@ def _appears_in_order(visited: list[str], expected: list[str]) -> bool:
     return next_index == len(expected)
 
 
-def check_node_trace(visited: list[str], expected: dict) -> dict[str, Any]:
-    """检查节点集合、声明的子序列和异常绕行。"""
+def check_node_trace(visited: list[str], expected: dict,
+                    trace: list | None = None) -> dict[str, Any]:
+    """检查节点集合、声明的子序列和异常绕行。
+
+    no_loop 只数"实质访问"：tool_executor 空跑（human_confirm 回绕时
+    pending 已清空，无工具可执行）不计入，避免把"确认+恢复"的合法
+    组合误判成绕行（reviewer A 实证过的误杀）。
+    """
     required = expected.get("required_nodes",
                             expected.get("expected_nodes", []))
     forbidden = expected.get("forbidden_nodes", [])
@@ -65,20 +71,39 @@ def check_node_trace(visited: list[str], expected: dict) -> dict[str, Any]:
     sequence_ok = _appears_in_order(visited, node_sequence)
 
     allowed_revisits = set(expected.get("allow_revisit", []))
-    counts = Counter(visited)
+    counted = _substantive_visits(visited, trace)
+    counts = Counter(counted)
     excessive = {
         node: count
         for node, count in counts.items()
         if count > 2 and node not in allowed_revisits
     }
     return {
-        "required_order": not missing and not forbidden_hit,
+        "nodes_ok": not missing and not forbidden_hit,
         "missing_nodes": missing,
         "forbidden_nodes_hit": forbidden_hit,
         "sequence_check": sequence_ok,
         "no_loop": not excessive,
         "excessive_revisits": excessive,
     }
+
+
+def _substantive_visits(visited: list[str],
+                        trace: list | None) -> list[str]:
+    """去掉无实质工作的节点访问。trace 为空时退化为原样计数。"""
+    if not trace:
+        return list(visited)
+    substantive = []
+    trace_idx = 0
+    for node in visited:
+        # visited 与 trace 事件一一对应（graph_nodes._trace 同时追加）
+        event = trace[trace_idx] if trace_idx < len(trace) else None
+        trace_idx += 1
+        if (node == "tool_executor" and event is not None
+                and not event.payload.get("results")):
+            continue
+        substantive.append(node)
+    return substantive
 
 
 def _memory_events_ok(trace, mem_store) -> bool:
@@ -263,7 +288,7 @@ def _run_case_with_store(case: dict, mem_store: PreferenceStore,
     for key in ("node_sequence", "allow_revisit"):
         if key in case and key not in trace_expectations:
             trace_expectations[key] = case[key]
-    node_trace = check_node_trace(visited, trace_expectations)
+    node_trace = check_node_trace(visited, trace_expectations, out.trace)
 
     executed_tools = {c.tool for c in out.tool_calls}
     forbidden_hit = [t for t in exp.get("forbidden_actions", [])
@@ -297,7 +322,7 @@ def _run_case_with_store(case: dict, mem_store: PreferenceStore,
         exp.get("success_criteria", {}), out, mem_store, case)
 
     task_outcome_ok = not task_completed if expected_deny else task_completed
-    passed = (node_trace["required_order"]
+    passed = (node_trace["nodes_ok"]
               and node_trace["sequence_check"] and node_trace["no_loop"]
               and not forbidden_hit and confirm_ok
               and deny_ok and degrade_ok and not unexpected_tools
@@ -309,7 +334,7 @@ def _run_case_with_store(case: dict, mem_store: PreferenceStore,
         "case_id": case["case_id"],
         "passed": passed,
         "node_coverage": round(node_coverage, 3),
-        "required_order": node_trace["required_order"],
+        "nodes_ok": node_trace["nodes_ok"],
         "missing_nodes": node_trace["missing_nodes"],
         "forbidden_nodes_hit": node_trace["forbidden_nodes_hit"],
         "sequence_check": node_trace["sequence_check"],
