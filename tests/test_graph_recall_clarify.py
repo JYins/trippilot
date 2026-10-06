@@ -68,3 +68,21 @@ def test_unrelated_clarify_answer_keeps_waiting_without_route_call():
     assert "北京西站" in out.final_response
     assert "北京南站" in out.final_response
     assert not any(call.tool == "map.route" for call in out.tool_calls)
+
+
+def test_low_confidence_without_place_ambiguity_accepts_restatement():
+    # 回归：纯低置信度（无地点歧义）时，用户的复述即视为确认，
+    # 不硬套地点选项匹配（TP-LOWCONF-001 的场景）
+    graph = build_graph(DeterministicStub())
+    state = new_state(
+        user_request="帮我删掉明天的面试日程",
+        asr_result=ASRResult(text="帮我删掉明天的面试日程", confidence=0.4,
+                             place_entities=[],
+                             time_entities=[{"name": "明天"}]),
+        trip_context={"clarify_answer": "明天"},
+        user_attributes=ATTRS,
+    )
+    out = run_graph(graph, state)
+    assert out.trip_context.get("clarify_resolved") == "明天"
+    assert not out.stop_after_clarify
+    assert "planner" in out.visited_nodes

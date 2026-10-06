@@ -1,0 +1,1 @@
+{"expect":{"destination":"北京西站"},"fixture":"map_beixizhan","note":"录制响应：版本化测试 fixture，不代表实时路况","routes":[{"destination":"北京西站","options":[{"detail":"14号线→9号线→7号线","duration_min":65,"line":"地铁","mode":"subway"},{"detail":"京承高速→二环→莲花池东路","distance_km":28.0,"duration_min":45,"mode":"drive"}],"origin":"望京"}],"source":"recorded"}

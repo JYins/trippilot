@@ -1,0 +1,1 @@
+{"expect":{"destination":"北京首都国际机场"},"fixture":"map_capital_airport","note":"录制响应：版本化测试 fixture，不代表实时路况","routes":[{"destination":"北京首都国际机场","options":[{"detail":"14号线→首都机场线","duration_min":55,"line":"地铁","mode":"subway"},{"detail":"京承高速→机场高速","distance_km":25.0,"duration_min":35,"mode":"drive"}],"origin":"望京"}],"source":"recorded"}

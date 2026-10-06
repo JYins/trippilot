@@ -144,3 +144,11 @@ def test_recorded_fixtures_reject_mismatched_parameters(
     assert field in result.error
     assert repr(expected) in result.error
     assert repr(actual) in result.error
+
+
+def test_fixture_key_for_matches_destination():
+    from trippilot.tools.base import fixture_key_for
+    assert fixture_key_for("map", {"destination": "国贸"}) == "guomao"
+    assert fixture_key_for("map", {"destination": "北京西站"}) == "beixizhan"
+    assert fixture_key_for("map", {"destination": "不存在的地点"}) == "default"
+    assert fixture_key_for("map", {}) == "default"

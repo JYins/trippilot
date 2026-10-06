@@ -26,3 +26,11 @@
 ## 对 eval 的影响
 
 新增 `tests/test_tools_recovery.py`：覆盖删除非末尾提醒后的四次 ID 分配与重建语义、提醒超时恢复时完整参数及幂等键不变、map 恢复只改 fixture 且 trace 留痕，以及 map 的 origin/destination 和 weather 的 area 不匹配时明确失败。现有 eval 中路线目的地不属于中关村的用例改用对应录制 fixture，语义不变；TP-RECOV-001 仍从不存在的 fixture 回退，但其 default 请求改为与默认录制响应一致。全量测试和 12 条 eval 都作为回归项。
+
+## 补记（20261006 晚）：recovery 回退的 fixture 选择
+
+上面"选择"写的是回退到 default，但实现时发现 default 的 expect 只覆盖中关村——TP-RECOV-001 的目的地是国贸，回退到 default 照样被 #11 的校验拦下，eval 掉到 11/12。
+
+改法：recovery 不再硬编码 default，而是按调用参数（目的地）在 fixtures/recorded 里找 expect 最匹配的 key（`tools/base.py::fixture_key_for`），找不到才回 default。代价是 recovery 多了一次目录扫描（录制文件数量级很小，可接受），以及 fixture 文件的 expect 段从此有了第二处读者（base._run_recorded 和 fixture_key_for），改 expect 格式时两处要一起看。
+
+另外 #11 的校验放宽了一点：只校验调用方实际传了的字段。DeterministicStub 给 map.route 传 origin=""（context 里没有时），空值不判——否则所有没起点的用例全挂。传了但对不上的（如"去国贸"拿"中关村"路线）照样明确失败，审查要的"参数与响应不一致就失败"还在。

@@ -25,7 +25,7 @@ from .memory.store import MemoryRejected, PreferenceStore
 from .policy_gate import check_tool_call, scan_tool_text
 from .state import (ASRResult, PlanStep, PolicyDecision, ToolCall, ToolResult,
                     TraceEvent, TripPilotState)
-from .tools import ToolError, get_tool
+from .tools import ToolError, fixture_key_for, get_tool
 
 
 def _trace(state: TripPilotState, node: str, event: str,
@@ -167,16 +167,24 @@ def build_graph(llm: LLMClient | None = None,
         answer = state.trip_context.get("clarify_answer")
         upd = _trace(state, "clarify", "clarify_checked",
                      {"need_clarify": need_clarify, "reasons": reasons})
-        matched_place = _match_place_answer(asr, answer) if asr else None
-        if need_clarify and not matched_place:
+        # 只有地点歧义才要求答案绑定到具体选项；纯低置信度（无地点歧义）
+        # 时用户的复述即视为确认，不硬套地点匹配
+        place_ambiguous = bool(asr and len(asr.place_entities) > 1)
+        matched_place = (_match_place_answer(asr, answer)
+                         if asr and place_ambiguous else None)
+        resolved = (matched_place if place_ambiguous
+                    else (answer.strip() if isinstance(answer, str)
+                          and answer.strip() else None))
+        if need_clarify and not resolved:
             upd["confirmation_state"] = "pending"
             # 追问走确定性模板：reason code 只进 trace，用户听到人话
             upd["final_response"] = _render_clarify_question(asr, low_conf)
             upd["stop_after_clarify"] = True  # 内部标记：等待用户回答
         elif need_clarify:
             upd["trip_context"] = {**state.trip_context,
-                                   "clarify_resolved": matched_place,
-                                   "destination": matched_place}
+                                   "clarify_resolved": resolved}
+            if matched_place:
+                upd["trip_context"]["destination"] = matched_place
             upd["stop_after_clarify"] = False
         return upd
 
@@ -434,11 +442,14 @@ def build_graph(llm: LLMClient | None = None,
             args = dict(call.args)
             if call.tool in fixture_fallback_tools and "fixture" in args:
                 before = args["fixture"]
-                if before != "default":
-                    args["fixture"] = "default"
+                # 按目的地选对得上的 fixture，而不是硬回 default
+                #（default 只覆盖中关村，回给国贸的调用照样 mismatch）
+                fallback = fixture_key_for(call.tool.split(".")[0], args)
+                if fallback != before:
+                    args["fixture"] = fallback
                     changes.append({"tool": call.tool,
                                     "parameter": "fixture",
-                                    "from": before, "to": "default"})
+                                    "from": before, "to": fallback})
             retries.append(ToolCall(tool=call.tool, args=args,
                                     source=call.source))
         upd = _trace(state, "recovery", "retry_once",

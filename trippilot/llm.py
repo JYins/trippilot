@@ -52,7 +52,10 @@ class DeterministicStub(LLMClient):
             steps.append({"step_id": "s1", "tool": "map.route",
                           "args": {"origin": context.get("origin", ""),
                                    "destination": context.get("destination", ""),
-                                   "fixture": "default",
+                                   # 录制 fixture 按目的地分文件：用例在 context 里声明
+                                   # map_fixture，缺省 default；和 fixture 的 expect
+                                   # 段一起保证"请求和录制数据对得上"
+                                   "fixture": context.get("map_fixture", "default"),
                                    "option_count": context.get("option_count", 1)},
                           "description": "查询路线"})
         if any(k in text for k in ("天气",)):

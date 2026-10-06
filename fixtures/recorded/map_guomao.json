@@ -1,0 +1,1 @@
+{"expect":{"destination":"国贸"},"fixture":"map_guomao","note":"录制响应：版本化测试 fixture，不代表实时路况","routes":[{"destination":"国贸","options":[{"detail":"14号线→10号线→1号线","duration_min":48,"line":"地铁","mode":"subway"},{"detail":"京承高速→四环→建国路","distance_km":16.5,"duration_min":32,"mode":"drive"}],"origin":"望京"}],"source":"recorded"}

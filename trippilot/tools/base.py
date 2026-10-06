@@ -68,7 +68,40 @@ class BaseTool:
                 )
         return ToolResult(tool=self.name, ok=True, data=data, source="recorded")
 
-    # -- live (manual only) ------------------------------------------------
+def fixture_key_for(tool_name: str, args: dict[str, Any]) -> str:
+    """按调用参数找 expect 最匹配的录制 fixture key，找不到回 default。
+
+    给 recovery 的 fixture 回退用：原 fixture 缺失/损坏时，
+    按目的地等关键字段选一个对得上的，而不是硬回 default
+    （default 的 expect 只覆盖中关村，回给国贸的调用照样 mismatch）。
+    """
+    best, best_score = "default", -1
+    prefix = f"{tool_name}_"
+    try:
+        paths = sorted(FIXTURES_DIR.glob(f"{prefix}*.json"))
+    except OSError:
+        return best
+    for path in paths:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        expect = data.get("expect") or {}
+        if not expect:
+            continue
+        score = 0
+        ok = True
+        for field, wanted in expect.items():
+            actual = args.get(field)
+            if actual is None or actual == "":
+                continue
+            if actual != wanted:
+                ok = False
+                break
+            score += 1
+        if ok and score > best_score and score > 0:
+            best, best_score = path.stem[len(prefix):], score
+    return best
     def _run_live(self, call: ToolCall) -> ToolResult:
         raise ToolError(f"{self.name}: live_manual 未实现或 key 未提供（手动触发专用）")
 
