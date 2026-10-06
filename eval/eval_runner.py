@@ -18,11 +18,12 @@ import json
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trippilot.graph import build_graph, new_state, run_graph
+from trippilot.graph import build_graph, memory_confirm_id, new_state, run_graph
 from trippilot.llm import DeterministicStub, ScriptedLLM
 from trippilot.memory.store import PreferenceStore, hash_embedder
 from trippilot.state import ASRResult
@@ -44,23 +45,148 @@ def load_dataset(path: Path) -> list[dict]:
 
 
 def _memory_events_ok(trace, mem_store) -> bool:
-    """含记忆用例的轨迹断言：必须有 memory_recall 事件；
-    敏感写入（payload written）出现前，trace 里必须出现过 human_confirm。
-    顺序断言逻辑复用 tests/test_graph_memory.py。
-    """
+    """敏感写入必须能追溯到更早、且针对同一候选的确认事件。"""
     if "memory_recall" not in [e.node for e in trace]:
         return False
-    hc_idx = next((i for i, e in enumerate(trace)
-                   if e.node == "human_confirm"), None)
-    for i, e in enumerate(trace):
+    confirmed_before: set[str] = set()
+    for e in trace:
+        if e.node == "human_confirm" and e.event == "confirmed":
+            confirmed_before.update(e.payload.get("confirmed_ids", []))
         if e.node == "memory_capture" and e.payload.get("written"):
-            sensitive = any(
-                (p := mem_store.get(mid)) is not None
-                and p.sensitivity == "sensitive"
-                for mid in e.payload["written"])
-            if sensitive and (hc_idx is None or hc_idx >= i):
-                return False
+            written_confirm_ids = set(
+                e.payload.get("written_confirm_ids", []))
+            for mid in e.payload["written"]:
+                pref = mem_store.get(mid)
+                if pref is None or pref.sensitivity != "sensitive":
+                    continue
+                confirm_id = memory_confirm_id(pref.model_dump())
+                if (confirm_id not in written_confirm_ids
+                        or confirm_id not in confirmed_before):
+                    return False
     return True
+
+
+def _memory_events(trace) -> list[Any]:
+    return [event for event in trace if event.node == "memory_capture"]
+
+
+def _written_ids(trace) -> set[str]:
+    return {
+        mid
+        for event in _memory_events(trace)
+        for mid in event.payload.get("written", [])
+    }
+
+
+def _reminder_created(out, _store, _case) -> bool:
+    return any(result.tool == "reminder.create" and result.ok
+               and result.data.get("reminder_id")
+               for result in out.tool_results)
+
+
+def _transient_rejected(out, _store, _case) -> bool:
+    events = _memory_events(out.trace)
+    return any("transient" in reason
+               for event in events
+               for reason in event.payload.get("rejected", [])) or (
+                   bool(events) and not _written_ids(out.trace))
+
+
+def _stable_preference_written(out, store, _case) -> bool:
+    return any((pref := store.get(mid)) is not None
+               and pref.sensitivity != "sensitive"
+               for mid in _written_ids(out.trace))
+
+
+def _memory_not_written(out, _store, _case) -> bool:
+    events = _memory_events(out.trace)
+    return bool(events) and not events[-1].payload.get("written", [])
+
+
+def _sensitive_pending(out, _store, _case) -> bool:
+    events = _memory_events(out.trace)
+    return bool(events) and bool(events[-1].payload.get("pending")) \
+        and not events[-1].payload.get("written", [])
+
+
+def _duplicate_suppressed(out, _store, _case) -> bool:
+    return any(result.tool == "reminder.create" and result.ok
+               and result.data.get("duplicate_suppressed") is True
+               for result in out.tool_results)
+
+
+def _failed_then_recovered(out, _store, _case) -> bool:
+    failed = any(not result.get("ok", True)
+                 for event in out.trace if event.node == "tool_executor"
+                 for result in event.payload.get("results", []))
+    return (failed and out.recovery_count > 0
+            and out.verification_result.get("task_completed") is True)
+
+
+def _recovered_with_matching_fixture(out, _store, _case) -> bool:
+    for index, event in enumerate(out.trace):
+        if event.node != "recovery":
+            continue
+        for change in event.payload.get("changes", []):
+            tool = change.get("tool", "")
+            # trace 里工具结果的 tool 是 base 名（如 map），change 里是全名
+            #（如 map.route），比较时只看 base 部分
+            base = tool.split(".")[0]
+            retried = any(call.tool == tool
+                          and call.args.get("fixture") == change.get("to")
+                          for call in out.tool_calls)
+            recovered = any(
+                str(result.get("tool", "")).split(".")[0] == base
+                and result.get("ok")
+                for later in out.trace[index + 1:]
+                if later.node == "tool_executor"
+                for result in later.payload.get("results", []))
+            if (change.get("parameter") == "fixture"
+                    and change.get("from") != change.get("to")
+                    and retried and recovered):
+                return True
+    return False
+
+
+def _final_verification_ok(out, _store, _case) -> bool:
+    return (out.verification_result.get("ok") is True
+            and out.verification_result.get("task_completed") is True)
+
+
+def _preferences_written(out, _store, expected) -> bool:
+    return len(_written_ids(out.trace)) == expected
+
+
+CriterionCheck = Callable[[Any, PreferenceStore, Any], bool]
+CRITERION_CHECKS: dict[str, CriterionCheck] = {
+    "reminder_created": _reminder_created,
+    "transient_rejected": _transient_rejected,
+    "stable_preference_written": _stable_preference_written,
+    "memory_written": _memory_not_written,
+    "sensitive_pending_confirm": _sensitive_pending,
+    "duplicate_suppressed": _duplicate_suppressed,
+    "tool_failed_then_recovered": _failed_then_recovered,
+    "recovered_with_matching_fixture": _recovered_with_matching_fixture,
+    "final_verification_ok": _final_verification_ok,
+    "preferences_written": _preferences_written,
+}
+
+
+def _check_success_criteria(criteria, out, mem_store, case) -> list[str]:
+    failures = []
+    for key, expected in criteria.items():
+        check = CRITERION_CHECKS.get(key)
+        if check is None:
+            failures.append(f"unknown success criterion: {key}")
+            continue
+        if key == "memory_written":
+            actual_ok = check(out, mem_store, case)
+            matched = actual_ok if expected is False else not actual_ok
+        else:
+            matched = check(out, mem_store, expected)
+        if not matched:
+            failures.append(f"success criterion failed: {key}={expected!r}")
+    return failures
 
 
 def run_case(case: dict, judge=None) -> dict:
@@ -122,10 +248,14 @@ def run_case(case: dict, judge=None) -> dict:
     if exp.get("expects_memory") or case.get("memory_candidates"):
         memory_events_ok = _memory_events_ok(out.trace, mem_store)
 
+    criterion_failures = _check_success_criteria(
+        exp.get("success_criteria", {}), out, mem_store, case)
+
     task_outcome_ok = not task_completed if expected_deny else task_completed
     passed = (node_coverage == 1.0 and not forbidden_hit and confirm_ok
               and deny_ok and degrade_ok and not unexpected_tools
               and memory_events_ok
+              and not criterion_failures
               and verification_ok and task_outcome_ok)
 
     mem_store.close()
@@ -143,6 +273,7 @@ def run_case(case: dict, judge=None) -> dict:
         "degrade_ok": degrade_ok,
         "task_outcome_ok": task_outcome_ok,
         "memory_events_ok": memory_events_ok,
+        "criterion_failures": criterion_failures,
         "policy_reasons": reasons,
         "verification": out.verification_result,
         "visited_nodes": visited,
@@ -196,7 +327,8 @@ def main() -> int:
             print(f"       missing={r['missing_nodes']} "
                   f"confirm_ok={r['confirm_ok']} deny_ok={r['deny_ok']} "
                   f"degrade_ok={r['degrade_ok']} "
-                  f"memory_events_ok={r['memory_events_ok']}")
+                  f"memory_events_ok={r['memory_events_ok']} "
+                  f"criterion_failures={r['criterion_failures']}")
             print(f"       visited={r['visited_nodes']}")
             print(f"       verification={r['verification']}")
         if j and "notes" in j:

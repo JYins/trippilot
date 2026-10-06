@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import time
 import uuid
 from typing import Any
@@ -82,6 +83,11 @@ def _insert_candidate(store: PreferenceStore, uid: str,
     return store._insert(
         uid, cand["content"], cand.get("kind", "other"),
         cand.get("sensitivity", "normal"), cand.get("source_type", "chat"))
+
+
+def memory_confirm_id(cand: dict[str, Any]) -> str:
+    raw = f"{cand.get('kind', 'other')}{cand['content']}"
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
 def _capture_candidate(store: PreferenceStore, uid: str,
@@ -259,9 +265,14 @@ def build_graph(llm: LLMClient | None = None,
     def human_confirm_node(state: TripPilotState) -> dict[str, Any]:
         # 非交互模式：trip_context.confirm=true 视为用户已确认
         confirmed = state.trip_context.get("confirm", False)
+        confirmed_ids = []
+        if confirmed:
+            confirmed_ids = [memory_confirm_id(cand)
+                             for cand in state.pending_memory_confirms]
         upd = _trace(state, "human_confirm",
                      "confirmed" if confirmed else "awaiting_user",
-                     {"confirmed": confirmed})
+                     {"confirmed": confirmed,
+                      "confirmed_ids": confirmed_ids})
         if confirmed:
             upd["confirmation_state"] = "confirmed"
         else:
@@ -368,6 +379,7 @@ def build_graph(llm: LLMClient | None = None,
         # 抽到的候选照样逐条走下面的 Gate 流程，不绕过。human_confirm
         # 回绕进来时 user_request 没变，不重复抽（否则确认后会重复写盘）。
         written: list[str] = []
+        written_confirm_ids: list[str] = []
         rejected: list[str] = []
         pending: list[dict[str, Any]] = []
         decisions = list(state.policy_decisions)
@@ -389,6 +401,7 @@ def build_graph(llm: LLMClient | None = None,
                 # 直接 _insert，不重复跑 Gate；deny 的候选进不了 pending
                 for cand in state.pending_memory_confirms:
                     written.append(_insert_candidate(memory_store, uid, cand))
+                    written_confirm_ids.append(memory_confirm_id(cand))
             else:
                 # 未确认：上一轮挂起的继续保留，重新走 human_confirm，不能静默丢
                 for cand in state.pending_memory_confirms:
@@ -408,7 +421,11 @@ def build_graph(llm: LLMClient | None = None,
                  "confirm_needed" if pending else "nothing_to_capture")
         upd = _trace(state, "memory_capture", event,
                      {"written": written, "rejected": rejected,
-                      "pending": len(pending), "extracted": extracted})
+                      "pending": len(pending),
+                      "pending_confirm_ids": [memory_confirm_id(cand)
+                                              for cand in pending],
+                      "written_confirm_ids": written_confirm_ids,
+                      "extracted": extracted})
         upd["policy_decisions"] = decisions
         upd["trip_context"] = trip_context
         upd["memory_candidates"] = []
