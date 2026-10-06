@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
 
@@ -42,6 +43,42 @@ def load_dataset(path: Path) -> list[dict]:
         if line:
             cases.append(json.loads(line))
     return cases
+
+
+def _appears_in_order(visited: list[str], expected: list[str]) -> bool:
+    next_index = 0
+    for node in visited:
+        if next_index < len(expected) and node == expected[next_index]:
+            next_index += 1
+    return next_index == len(expected)
+
+
+def check_node_trace(visited: list[str], expected: dict) -> dict[str, Any]:
+    """检查节点集合、声明的子序列和异常绕行。"""
+    required = expected.get("required_nodes",
+                            expected.get("expected_nodes", []))
+    forbidden = expected.get("forbidden_nodes", [])
+    missing = [node for node in required if node not in visited]
+    forbidden_hit = [node for node in forbidden if node in visited]
+
+    node_sequence = expected.get("node_sequence", [])
+    sequence_ok = _appears_in_order(visited, node_sequence)
+
+    allowed_revisits = set(expected.get("allow_revisit", []))
+    counts = Counter(visited)
+    excessive = {
+        node: count
+        for node, count in counts.items()
+        if count > 2 and node not in allowed_revisits
+    }
+    return {
+        "required_order": not missing and not forbidden_hit,
+        "missing_nodes": missing,
+        "forbidden_nodes_hit": forbidden_hit,
+        "sequence_check": sequence_ok,
+        "no_loop": not excessive,
+        "excessive_revisits": excessive,
+    }
 
 
 def _memory_events_ok(trace, mem_store) -> bool:
@@ -219,6 +256,11 @@ def run_case(case: dict, judge=None) -> dict:
     required = exp.get("required_nodes", [])
     covered = [n for n in required if n in visited]
     node_coverage = len(covered) / len(required) if required else 1.0
+    trace_expectations = dict(exp)
+    for key in ("node_sequence", "allow_revisit"):
+        if key in case and key not in trace_expectations:
+            trace_expectations[key] = case[key]
+    node_trace = check_node_trace(visited, trace_expectations)
 
     executed_tools = {c.tool for c in out.tool_calls}
     forbidden_hit = [t for t in exp.get("forbidden_actions", [])
@@ -252,7 +294,9 @@ def run_case(case: dict, judge=None) -> dict:
         exp.get("success_criteria", {}), out, mem_store, case)
 
     task_outcome_ok = not task_completed if expected_deny else task_completed
-    passed = (node_coverage == 1.0 and not forbidden_hit and confirm_ok
+    passed = (node_trace["required_order"]
+              and node_trace["sequence_check"] and node_trace["no_loop"]
+              and not forbidden_hit and confirm_ok
               and deny_ok and degrade_ok and not unexpected_tools
               and memory_events_ok
               and not criterion_failures
@@ -265,7 +309,12 @@ def run_case(case: dict, judge=None) -> dict:
         "case_id": case["case_id"],
         "passed": passed,
         "node_coverage": round(node_coverage, 3),
-        "missing_nodes": [n for n in required if n not in visited],
+        "required_order": node_trace["required_order"],
+        "missing_nodes": node_trace["missing_nodes"],
+        "forbidden_nodes_hit": node_trace["forbidden_nodes_hit"],
+        "sequence_check": node_trace["sequence_check"],
+        "no_loop": node_trace["no_loop"],
+        "excessive_revisits": node_trace["excessive_revisits"],
         "forbidden_hit": forbidden_hit,
         "unexpected_tools": unexpected_tools,
         "confirm_ok": confirm_ok,
@@ -279,6 +328,14 @@ def run_case(case: dict, judge=None) -> dict:
         "visited_nodes": visited,
         "final_response": out.final_response,
     }
+
+    clarify_event = next(
+        (event for event in reversed(out.trace)
+         if event.node == "clarify" and event.event == "clarify_checked"),
+        None,
+    )
+    if clarify_event is not None:
+        result["clarify_checked"] = clarify_event.payload
 
     # judge 只写进报告，不参与上面的 passed 判定（铁律）
     if judge is not None:
@@ -325,6 +382,8 @@ def main() -> int:
         print(line)
         if not r["passed"]:
             print(f"       missing={r['missing_nodes']} "
+                  f"sequence_ok={r['sequence_check']} "
+                  f"no_loop={r['no_loop']} "
                   f"confirm_ok={r['confirm_ok']} deny_ok={r['deny_ok']} "
                   f"degrade_ok={r['degrade_ok']} "
                   f"memory_events_ok={r['memory_events_ok']} "

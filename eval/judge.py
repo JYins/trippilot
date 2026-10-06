@@ -53,19 +53,32 @@ class DeterministicJudge:
             efficiency = min(efficiency, 0.5)
         efficiency = _clamp01(efficiency)
 
-        # 澄清：没走 clarify 节点 = 无需澄清，不扣分；
-        # 走了且 context 里预置了答案 = 歧义被解决；
-        # 走了但没答案、final_response 非空 = 问了一句就停住；
-        # 走了但连话都没说出来 = 最差
-        clarify_visited = "clarify" in visited
-        if not clarify_visited:
-            clarify_quality, why = 1.0, "无需澄清"
+        clarify_checked = trace_result.get("clarify_checked")
+        need_clarify = (clarify_checked.get("need_clarify")
+                        if isinstance(clarify_checked, dict) else None)
+        if need_clarify is False:
+            clarify_quality = 1.0
+            why = "clarify_checked.need_clarify=False，无需澄清"
+        elif need_clarify is True:
+            if case.get("context", {}).get("clarify_answer"):
+                clarify_quality = 1.0
+                why = "clarify_checked.need_clarify=True，歧义已解决"
+            elif trace_result.get("final_response"):
+                clarify_quality = 0.6
+                why = ("clarify_checked.need_clarify=True，已追问；"
+                       "问法质量需人工/LLM 复核")
+            else:
+                clarify_quality = 0.3
+                why = ("clarify_checked.need_clarify=True，"
+                       "但没有有效追问")
+        elif "clarify" not in visited:
+            clarify_quality, why = 1.0, "无 clarify_checked 事件，且未访问澄清节点"
         elif case.get("context", {}).get("clarify_answer"):
-            clarify_quality, why = 1.0, "歧义已解决"
+            clarify_quality, why = 1.0, "无 clarify_checked 事件；按兼容分支判定歧义已解决"
         elif trace_result.get("final_response"):
-            clarify_quality, why = 0.6, "触发了澄清但未确认问法质量（需人工/LLM 复核）"
+            clarify_quality, why = 0.6, "无 clarify_checked 事件；按兼容分支判定已追问"
         else:
-            clarify_quality, why = 0.3, "澄清节点执行但无有效追问"
+            clarify_quality, why = 0.3, "无 clarify_checked 事件；按兼容分支未发现有效追问"
         notes = (f"plan_efficiency={efficiency:.2f}（重复节点{repeats}次，"
                  f"越界工具{trace_result.get('unexpected_tools') or '无'}）；"
                  f"clarify_quality={clarify_quality:.2f}（{why}）")
