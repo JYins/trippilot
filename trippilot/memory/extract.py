@@ -14,13 +14,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# 敏感兜底：sensitivity 只看内容判定，不依赖某条规则有没有标；
-# 规则漏标了这里也能拦住（比如"记住我家地址"被记住型规则抽到时）。
-_SENSITIVE_MARKERS = re.compile(
-    r"住址|我家|身份证|护照|电话|手机|手机号|生日|密码|验证码")
-
-# 中国大陆手机号：格式固定，基本无歧义
-_PHONE_RE = re.compile(r"1[3-9]\d{9}")
+from .pii import classify_pii
 
 # 触发词后面只剩代词/语气词：没信息量，抽到了也是噪音
 _JUNK_TAIL = re.compile(r"^(这个|那个|这|那|它|这件事|那件事)?[，。！？~…]*$")
@@ -53,7 +47,7 @@ def _upgrade_kind(content: str, kind: str) -> str:
 def _upgrade_sensitivity(content: str, sensitivity: str) -> str:
     if sensitivity == "sensitive":
         return sensitivity
-    if _SENSITIVE_MARKERS.search(content) or _PHONE_RE.search(content):
+    if classify_pii(content):
         return "sensitive"
     return sensitivity
 

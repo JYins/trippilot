@@ -178,14 +178,20 @@ def evaluate_memory_candidate(candidate: dict[str, Any]) -> PolicyDecision:
     """Memory Gate：决定一条候选记忆的去向。
 
     candidate: {content, source_type, is_transient, sensitivity, ...}
-    sensitivity: normal / sensitive（家庭住址等）
+    sensitivity: normal / sensitive；调用方可主动标 sensitive，但不能用
+    normal 覆盖 Gate 对内容的独立判断。
     """
     if candidate.get("is_transient"):
         return PolicyDecision(decision="deny", reason_code="transient_memory_rejected",
                               detail="一次性目的地/临时信息默认不得写入长期记忆")
-    if candidate.get("sensitivity") == "sensitive":
+    # memory 包会导入 store，而 store 又依赖本模块；放在调用处避免初始化环。
+    from .memory.pii import classify_pii
+
+    content = str(candidate.get("content") or "")
+    if (candidate.get("sensitivity") == "sensitive"
+            or classify_pii(content)):
         return PolicyDecision(decision="confirm", reason_code="sensitive_memory_needs_confirm",
-                              detail="敏感信息（家庭住址等）写入前单独确认，并允许删除")
+                              detail="敏感或疑似 PII 写入前单独确认，并允许删除")
     return PolicyDecision(decision="allow", reason_code="stable_preference_write",
                           detail="稳定偏好写入长期记忆")
 
