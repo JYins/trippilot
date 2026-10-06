@@ -1,5 +1,7 @@
 """memory_recall / memory_capture 进图：走现有 human_confirm，不另起确认机制。"""
 
+import pytest
+
 from trippilot.graph import build_graph, new_state, run_graph
 from trippilot.llm import DeterministicStub
 from trippilot.memory.store import PreferenceStore, hash_embedder
@@ -7,13 +9,17 @@ from trippilot.memory.store import PreferenceStore, hash_embedder
 ATTRS = {"user_id": "owner", "authenticated": True, "role": "owner"}
 
 
-def _graph(tmp_path):
+@pytest.fixture()
+def graph_and_store(tmp_path):
     store = PreferenceStore(tmp_path / "qdrant", embed_fn=hash_embedder())
-    return build_graph(DeterministicStub(), memory_store=store), store
+    try:
+        yield build_graph(DeterministicStub(), memory_store=store), store
+    finally:
+        store.close()
 
 
-def test_recall_injects_preferences(tmp_path):
-    graph, store = _graph(tmp_path)
+def test_recall_stores_preferences_in_state(graph_and_store):
+    graph, store = graph_and_store
     store.remember("owner", "公司地址：望京 SOHO", kind="place")
     out = run_graph(graph, new_state(user_request="送我去公司",
                                      user_attributes=ATTRS))
@@ -30,8 +36,8 @@ def test_recall_without_store_is_noop():
     assert out.preferences == []
 
 
-def test_sensitive_memory_goes_through_human_confirm(tmp_path):
-    graph, store = _graph(tmp_path)
+def test_sensitive_memory_goes_through_human_confirm(graph_and_store):
+    graph, store = graph_and_store
     state = new_state(
         user_request="记住我家地址",
         trip_context={"confirm": True},  # 非交互：视为用户已确认
@@ -62,8 +68,8 @@ def test_sensitive_memory_goes_through_human_confirm(tmp_path):
     assert out.pending_memory_confirms == []
 
 
-def test_sensitive_memory_waits_for_user(tmp_path):
-    graph, store = _graph(tmp_path)
+def test_sensitive_memory_waits_for_user(graph_and_store):
+    graph, store = graph_and_store
     state = new_state(
         user_request="记住我家地址",
         user_attributes=ATTRS,

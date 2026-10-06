@@ -16,10 +16,6 @@ from pydantic import BaseModel, Field
 # 车辆状态：纯软件模拟，由测试面板 / 场景 fixture 注入
 VehicleState = Literal["parked_simulated", "slow_simulated", "driving_simulated"]
 
-# 驾驶员交互能力：纯软件模拟
-InteractionMode = Literal["full", "limited", "voice_only"]
-
-
 class ASRResult(BaseModel):
     text: str
     confidence: float = Field(ge=0.0, le=1.0)

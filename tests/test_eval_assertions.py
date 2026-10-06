@@ -1,7 +1,19 @@
+import pytest
+
 from eval.eval_runner import _memory_events_ok, run_case
 from trippilot.graph import memory_confirm_id
 from trippilot.memory.store import PreferenceStore, hash_embedder
 from trippilot.state import TraceEvent
+
+
+@pytest.fixture()
+def store(tmp_path):
+    memory_store = PreferenceStore(tmp_path / "qdrant",
+                                   embed_fn=hash_embedder())
+    try:
+        yield memory_store
+    finally:
+        memory_store.close()
 
 
 def test_unknown_success_criterion_fails_case():
@@ -24,8 +36,7 @@ def test_unknown_success_criterion_fails_case():
     ]
 
 
-def test_memory_events_reject_mismatched_confirm_id(tmp_path):
-    store = PreferenceStore(tmp_path / "qdrant", embed_fn=hash_embedder())
+def test_memory_events_reject_mismatched_confirm_id(store):
     mid = store._insert("owner", "家庭住址：望京", "place", "sensitive", "chat")
     trace = [
         TraceEvent(node="memory_recall", event="recalled"),
@@ -37,11 +48,9 @@ def test_memory_events_reject_mismatched_confirm_id(tmp_path):
     ]
 
     assert _memory_events_ok(trace, store) is False
-    store.close()
 
 
-def test_memory_events_accept_matching_confirm_id(tmp_path):
-    store = PreferenceStore(tmp_path / "qdrant", embed_fn=hash_embedder())
+def test_memory_events_accept_matching_confirm_id(store):
     candidate = {"kind": "place", "content": "家庭住址：望京"}
     confirm_id = memory_confirm_id(candidate)
     mid = store._insert("owner", candidate["content"], candidate["kind"],
@@ -58,4 +67,3 @@ def test_memory_events_accept_matching_confirm_id(tmp_path):
     ]
 
     assert _memory_events_ok(trace, store) is True
-    store.close()

@@ -22,8 +22,8 @@ import inspect
 import json
 import pkgutil
 import sys
-import tempfile
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -71,10 +71,6 @@ class RecordingLLM(DeterministicStub):
                           "summary": state_summary})
         return super().final_answer(state_summary=state_summary)
 
-
-# ---------------------------------------------------------------------------
-# 1. 事件溯源不变式
-# ---------------------------------------------------------------------------
 
 def _leaves(value: Any) -> list[str]:
     """展开成叶子标量字符串：工具结果摘要就长这样。"""
@@ -142,10 +138,6 @@ def audit_event_sourcing(out: TripPilotState,
     return {"passed": not missing, "missing": missing}
 
 
-# ---------------------------------------------------------------------------
-# 2. 工具注册表 seam
-# ---------------------------------------------------------------------------
-
 def _declared_tool_classes() -> list[type]:
     """tools/ 包里声明的所有具体工具类。"""
     pkg = Path(trippilot.tools.__file__).parent
@@ -167,8 +159,12 @@ def _direct_constructions(path: Path) -> list[str]:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        name = func.id if isinstance(func, ast.Name) else \
-            func.attr if isinstance(func, ast.Attribute) else ""
+        if isinstance(func, ast.Name):
+            name = func.id
+        elif isinstance(func, ast.Attribute):
+            name = func.attr
+        else:
+            name = ""
         if name.endswith("Tool") and name != "BaseTool":
             hits.append(f"{path.name}:{node.lineno} 直调 {name}()，应走 get_tool")
     return hits
@@ -202,18 +198,13 @@ def audit_tool_registry() -> dict[str, Any]:
     return {"passed": not issues, "issues": issues}
 
 
-# ---------------------------------------------------------------------------
-# 跑一条轨迹 + 汇总报告
-# ---------------------------------------------------------------------------
-
-def run_audit_case(case: dict) -> tuple[TripPilotState, list[dict]]:
+def _run_audit_case_with_store(
+        case: dict,
+        mem_store: PreferenceStore) -> tuple[TripPilotState, list[dict]]:
     # 工具是有状态单例（reminder 幂等存储）：每条用例前清零，互不污染
     ReminderTool.reset()
     TripLogTool.reset()
     llm = RecordingLLM(case.get("scripted_plan"))
-    mem_dir = tempfile.TemporaryDirectory()
-    mem_store = PreferenceStore(Path(mem_dir.name) / "qdrant",
-                               embed_fn=hash_embedder())
     graph = build_graph(llm, memory_store=mem_store)
 
     asr_cfg = case.get("asr")
@@ -230,9 +221,20 @@ def run_audit_case(case: dict) -> tuple[TripPilotState, list[dict]]:
         user_attributes={"user_id": "owner", "authenticated": True,
                          "role": "owner"})
     out = run_graph(graph, state)
-    mem_store.close()
-    mem_dir.cleanup()
     return out, llm.seen
+
+
+def run_audit_case(case: dict) -> tuple[TripPilotState, list[dict]]:
+    with TemporaryDirectory() as temp_dir:
+        mem_store = PreferenceStore(Path(temp_dir) / "qdrant",
+                                    embed_fn=hash_embedder())
+        try:
+            return _run_audit_case_with_store(case, mem_store)
+        except Exception as exc:
+            case_id = case.get("case_id", "unknown-case")
+            raise RuntimeError(f"审计用例 {case_id} 执行失败") from exc
+        finally:
+            mem_store.close()
 
 
 def load_cases(path: Path) -> list[dict]:

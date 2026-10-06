@@ -11,8 +11,10 @@ UID = "u_gate"
 @pytest.fixture()
 def store(tmp_path):
     s = PreferenceStore(tmp_path / "qdrant", embed_fn=hash_embedder())
-    yield s
-    s.close()
+    try:
+        yield s
+    finally:
+        s.close()
 
 
 def test_transient_rejected_and_not_written(store):

@@ -14,8 +14,10 @@ UID = "u_test"
 @pytest.fixture()
 def store(tmp_path):
     s = PreferenceStore(tmp_path / "qdrant", embed_fn=hash_embedder())
-    yield s
-    s.close()
+    try:
+        yield s
+    finally:
+        s.close()
 
 
 def test_remember_recall_roundtrip(store):
@@ -83,17 +85,19 @@ def test_update_kind_only_skips_embed(tmp_path):
         return base(texts)
 
     s = PreferenceStore(tmp_path / "qdrant", embed_fn=counting_embed)
-    _, mid = s.remember(UID, "偏好地铁出行", kind="other")
-    embedded = len(calls)
-    # 只改 kind：直接写，不重新向量化
-    status, updated = s.update(mid, kind="label")
-    assert status == "written" and updated is not None
-    assert updated.kind == "label"
-    assert len(calls) == embedded
-    # 改 content：重新向量化一次
-    s.update(mid, content="偏好骑车出行")
-    assert len(calls) == embedded + 1
-    s.close()
+    try:
+        _, mid = s.remember(UID, "偏好地铁出行", kind="other")
+        embedded = len(calls)
+        # 只改 kind：直接写，不重新向量化
+        status, updated = s.update(mid, kind="label")
+        assert status == "written" and updated is not None
+        assert updated.kind == "label"
+        assert len(calls) == embedded
+        # 改 content：重新向量化一次
+        s.update(mid, content="偏好骑车出行")
+        assert len(calls) == embedded + 1
+    finally:
+        s.close()
 
 
 def test_forget(store):

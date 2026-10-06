@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 from collections import Counter
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -142,8 +142,9 @@ def _memory_not_written(out, _store, _case) -> bool:
 
 def _sensitive_pending(out, _store, _case) -> bool:
     events = _memory_events(out.trace)
-    return bool(events) and bool(events[-1].payload.get("pending")) \
-        and not events[-1].payload.get("written", [])
+    return (bool(events)
+            and bool(events[-1].payload.get("pending"))
+            and not events[-1].payload.get("written", []))
 
 
 def _duplicate_suppressed(out, _store, _case) -> bool:
@@ -226,14 +227,12 @@ def _check_success_criteria(criteria, out, mem_store, case) -> list[str]:
     return failures
 
 
-def run_case(case: dict, judge=None) -> dict:
+def _run_case_with_store(case: dict, mem_store: PreferenceStore,
+                         judge=None) -> dict:
     ReminderTool.reset()
     TripLogTool.reset()
     llm = (ScriptedLLM(case["scripted_plan"]) if "scripted_plan" in case
            else DeterministicStub())
-    mem_dir = tempfile.TemporaryDirectory()
-    mem_store = PreferenceStore(Path(mem_dir.name) / "qdrant",
-                               embed_fn=hash_embedder())
     graph = build_graph(llm, memory_store=mem_store)
 
     asr_cfg = case.get("asr")
@@ -302,9 +301,6 @@ def run_case(case: dict, judge=None) -> dict:
               and not criterion_failures
               and verification_ok and task_outcome_ok)
 
-    mem_store.close()
-    mem_dir.cleanup()
-
     result = {
         "case_id": case["case_id"],
         "passed": passed,
@@ -345,6 +341,19 @@ def run_case(case: dict, judge=None) -> dict:
         except Exception as e:  # judge 挂了不炸整轮评测，如实记错
             result["judge"] = {"error": str(e)}
     return result
+
+
+def run_case(case: dict, judge=None) -> dict:
+    with TemporaryDirectory() as temp_dir:
+        mem_store = PreferenceStore(Path(temp_dir) / "qdrant",
+                                    embed_fn=hash_embedder())
+        try:
+            return _run_case_with_store(case, mem_store, judge)
+        except Exception as exc:
+            case_id = case.get("case_id", "unknown-case")
+            raise RuntimeError(f"评测用例 {case_id} 执行失败") from exc
+        finally:
+            mem_store.close()
 
 
 def main() -> int:

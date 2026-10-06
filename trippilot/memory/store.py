@@ -96,7 +96,6 @@ class PreferenceStore:
         self._client = QdrantClient(path=str(path))
         self._embed_fn = embed_fn
 
-    # -- 内部 ---------------------------------------------------------
     def _embed(self, texts: list[str]) -> list[list[float]]:
         if self._embed_fn is None:
             # 生产默认：第一次向量化时才加载模型（慢，且要下载）
@@ -126,7 +125,6 @@ class PreferenceStore:
     def _to_preference(point_id: object, payload: dict) -> "Preference":
         return Preference(**{**payload, "id": str(point_id)})
 
-    # -- 写入：唯一入口，先过 Memory Gate --------------------------------
     def remember(self, user_id: str, content: str, kind: PreferenceKind,
                  sensitivity: Sensitivity = "normal",
                  source_type: str = "chat",
@@ -167,7 +165,6 @@ class PreferenceStore:
             id=pref.id, vector=vec, payload=pref.model_dump())])
         return pref.id
 
-    # -- 读取 ----------------------------------------------------------
     def recall(self, user_id: str, query: str, top_k: int = 5,
                kind: PreferenceKind | None = None) -> list[Preference]:
         """向量检索 + user_id 过滤；还没记过任何东西时返回 []。"""
@@ -194,7 +191,6 @@ class PreferenceStore:
             return None
         return self._to_preference(records[0].id, records[0].payload)
 
-    # -- 修改 / 删除 ----------------------------------------------------
     def update(self, memory_id: str, content: str | None = None,
                kind: PreferenceKind | None = None,
                sensitivity: Sensitivity | None = None,

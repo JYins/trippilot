@@ -9,7 +9,10 @@ from trippilot import api
 from trippilot.state import PolicyDecision
 
 
-client = TestClient(api.app)
+@pytest.fixture()
+def client():
+    with TestClient(api.app) as test_client:
+        yield test_client
 
 
 @pytest.mark.parametrize("confidence", [0.0, 1.0])
@@ -19,14 +22,14 @@ def test_asr_confidence_accepts_boundaries(confidence):
     assert request.asr_confidence == confidence
 
 
-def test_asr_confidence_out_of_range_returns_422():
+def test_asr_confidence_out_of_range_returns_422(client):
     response = client.post("/turn", json={"asr_confidence": 1.5})
 
     assert response.status_code == 422
     assert response.json()["detail"][0]["loc"] == ["body", "asr_confidence"]
 
 
-def test_invalid_vehicle_state_returns_422():
+def test_invalid_vehicle_state_returns_422(client):
     response = client.post("/turn", json={"vehicle_state": "flying"})
 
     assert response.status_code == 422
@@ -73,7 +76,7 @@ def test_logs_hide_request_text_and_policy_detail(caplog, monkeypatch):
     assert "***address***" in logs
 
 
-def test_health_declares_single_user_mode_without_authentication():
+def test_health_declares_single_user_mode_without_authentication(client):
     response = client.get("/health")
 
     assert response.status_code == 200

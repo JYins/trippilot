@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+from contextlib import asynccontextmanager
 from copy import deepcopy
 from hashlib import sha1
 from threading import Lock
@@ -23,13 +24,32 @@ from .llm import make_llm
 from .memory.store import DEFAULT_PATH, PreferenceStore
 from .state import ASRResult, VehicleState
 
-log = logging.getLogger("trippilot.api")
-
-app = FastAPI(title="TripPilot 途行智驾", version="0.1.0")
-
 _graph = None
+_memory_store: PreferenceStore | None = None
 _pending_memory_confirms: dict[str, dict[str, dict[str, Any]]] = {}
 _pending_memory_lock = Lock()
+
+
+def close_graph_resources() -> None:
+    global _graph, _memory_store
+    if _memory_store is not None:
+        _memory_store.close()
+    _memory_store = None
+    _graph = None
+
+
+@asynccontextmanager
+async def _app_lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        close_graph_resources()
+
+
+log = logging.getLogger("trippilot.api")
+
+app = FastAPI(title="TripPilot 途行智驾", version="0.1.0",
+              lifespan=_app_lifespan)
 
 LOCAL_USER_ATTRIBUTES = {
     "user_id": "local",
@@ -39,16 +59,12 @@ LOCAL_USER_ATTRIBUTES = {
 
 
 def get_graph():
-    global _graph
+    global _graph, _memory_store
     if _graph is None:
-        _graph = build_graph(make_llm(),
-                             memory_store=PreferenceStore(DEFAULT_PATH))
+        _memory_store = PreferenceStore(DEFAULT_PATH)
+        _graph = build_graph(make_llm(), memory_store=_memory_store)
     return _graph
 
-
-# ---------------------------------------------------------------------------
-# 脱敏
-# ---------------------------------------------------------------------------
 
 _SENSITIVE_KEYS = {"home_address", "exact_address", "contact", "phone",
                    "reminder_content", "calendar_body", "content"}
@@ -97,10 +113,6 @@ def _request_log(req: "TurnRequest") -> dict[str, Any]:
         }
     return _redact(payload)
 
-
-# ---------------------------------------------------------------------------
-# 请求模型
-# ---------------------------------------------------------------------------
 
 class TurnRequest(BaseModel):
     session_id: str | None = None

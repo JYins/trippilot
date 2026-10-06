@@ -29,9 +29,7 @@ def _case(case_id: str) -> dict:
     raise AssertionError(f"fixture 里没有 {case_id}")
 
 
-# -- 事件溯源不变式 ----------------------------------------------------------
-
-def test_event_sourcing_invariant_passes():
+def test_model_visible_values_are_present_in_trace():
     # TP-ROUTE-001：多工具全链路，intent/工具参数/工具结果都要进日志
     out, seen = run_audit_case(_case("TP-ROUTE-001"))
     assert seen, "这条用例应该至少调一次 LLM"
@@ -39,7 +37,7 @@ def test_event_sourcing_invariant_passes():
     assert result["passed"], f"缺失项: {result['missing']}"
 
 
-def test_event_sourcing_catches_dropped_event():
+def test_audit_reports_missing_tool_result_event():
     # 反例：把 tool_executor 事件从 trace 里删掉，审计必须揪出来
     out, seen = run_audit_case(_case("TP-ROUTE-001"))
     out.trace = [e for e in out.trace if e.node != "tool_executor"]
@@ -48,7 +46,7 @@ def test_event_sourcing_catches_dropped_event():
     assert any("final_answer.tool_result" in m for m in result["missing"])
 
 
-def test_event_sourcing_catches_missing_intent():
+def test_audit_reports_missing_intent_event():
     # 反例：intent 事件丢了，plan.intent 断言必须 fail
     out, seen = run_audit_case(_case("TP-ROUTE-001"))
     out.trace = [e for e in out.trace if e.node != "intent"]
@@ -57,21 +55,21 @@ def test_event_sourcing_catches_missing_intent():
     assert any("plan.intent" in m for m in result["missing"])
 
 
-def test_preferences_recall_matches_logged_count(tmp_path):
+def test_audit_compares_recalled_preferences_with_logged_count(tmp_path):
     # 召回的偏好要和 memory_recall 事件对得上
     store = PreferenceStore(tmp_path / "qdrant", embed_fn=hash_embedder())
-    store.remember("owner", "公司地址：望京 SOHO", kind="place")
-    llm = RecordingLLM()
-    graph = build_graph(llm, memory_store=store)
-    out = run_graph(graph, new_state(user_request="送我去公司",
-                                     user_attributes=ATTRS))
-    assert out.preferences, "应该召回至少一条偏好"
-    result = audit_event_sourcing(out, llm.seen)
-    assert result["passed"], f"缺失项: {result['missing']}"
-    store.close()
+    try:
+        store.remember("owner", "公司地址：望京 SOHO", kind="place")
+        llm = RecordingLLM()
+        graph = build_graph(llm, memory_store=store)
+        out = run_graph(graph, new_state(user_request="送我去公司",
+                                         user_attributes=ATTRS))
+        assert out.preferences, "应该召回至少一条偏好"
+        result = audit_event_sourcing(out, llm.seen)
+        assert result["passed"], f"缺失项: {result['missing']}"
+    finally:
+        store.close()
 
-
-# -- 工具注册表 seam --------------------------------------------------------
 
 def test_tool_registry_seam_passes_on_current_code():
     result = audit_tool_registry()
@@ -103,8 +101,6 @@ def test_direct_construction_is_flagged(tmp_path):
                     "tool = get_tool('map.route')\n", encoding="utf-8")
     assert _direct_constructions(good) == []
 
-
-# -- 全量报告 --------------------------------------------------------------
 
 def test_full_audit_report_passes():
     report = run_harness_audit(ROOT / "fixtures" / "dataset_v0.jsonl")

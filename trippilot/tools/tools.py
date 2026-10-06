@@ -3,15 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import Any
 
 from ..state import ToolCall, ToolResult
 from .base import BaseTool, ToolError
-
-# ---------------------------------------------------------------------------
-# map.route / map.search
-# ---------------------------------------------------------------------------
 
 class MapTool(BaseTool):
     name = "map"
@@ -57,10 +52,6 @@ class MapTool(BaseTool):
         return result
 
 
-# ---------------------------------------------------------------------------
-# weather.now / weather.forecast
-# ---------------------------------------------------------------------------
-
 class WeatherTool(BaseTool):
     name = "weather"
     supported_operations = {"weather.now", "weather.forecast"}
@@ -77,10 +68,6 @@ class WeatherTool(BaseTool):
             return _unsupported_operation(call)
         return super()._run_recorded(call)
 
-
-# ---------------------------------------------------------------------------
-# reminder.create / update / delete：幂等，禁止重复副作用
-# ---------------------------------------------------------------------------
 
 class ReminderTool(BaseTool):
     """提醒工具：内存存储（原型），用幂等键防止重试导致重复创建。
@@ -158,10 +145,6 @@ class ReminderTool(BaseTool):
         cls._idempotency = {}
         cls._next_id = 1
 
-
-# ---------------------------------------------------------------------------
-# trip_log：行程轨迹记录（只读/追加）
-# ---------------------------------------------------------------------------
 
 class TripLogTool(BaseTool):
     name = "trip_log"

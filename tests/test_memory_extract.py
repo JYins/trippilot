@@ -23,7 +23,7 @@ def _cases():
         return [json.loads(line) for line in f if line.strip()]
 
 
-def test_fixture_cases():
+def test_extraction_matches_fixture_expectations():
     """评测集：正例抽到且字段达标，反例一条不抽。"""
     for case in _cases():
         cands = extract_candidates(case["text"])
@@ -40,12 +40,14 @@ def test_fixture_cases():
 def test_confidence_ordering():
     """置信度 sanity：明确的记忆指令 > 称呼 > 持久标记 >
     偏好动词 > 禁止句式（全场最低）。"""
-    conf = lambda t: extract_candidates(t)[0]["confidence"]  # noqa: E731
-    remember = conf("记住我喜欢坐地铁")
-    label = conf("叫我 Jeremy")
-    persistent = conf("以后都坐地铁")
-    like = conf("我喜欢坐地铁")
-    forbid = conf("以后别给我放广告")
+    def confidence_for(text: str) -> float:
+        return extract_candidates(text)[0]["confidence"]
+
+    remember = confidence_for("记住我喜欢坐地铁")
+    label = confidence_for("叫我 Jeremy")
+    persistent = confidence_for("以后都坐地铁")
+    like = confidence_for("我喜欢坐地铁")
+    forbid = confidence_for("以后别给我放广告")
     assert remember > label > persistent > like > forbid
     assert forbid < 0.7  # 即使有"以后"也分不清真禁忌和带情绪的一次性抱怨，
     # 禁止句式置信度垫底：模糊的让 Gate 问人

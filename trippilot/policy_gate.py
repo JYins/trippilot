@@ -27,10 +27,6 @@ TOOL_POLICIES = {
 LOW_CONFIDENCE_THRESHOLD = 0.6
 
 
-# ---------------------------------------------------------------------------
-# ABAC 主入口
-# ---------------------------------------------------------------------------
-
 def evaluate(
     *,
     subject: dict[str, Any],
@@ -86,8 +82,8 @@ def evaluate(
                               detail="创建提醒需展示最终时间与内容并确认")
 
     # 6. 行驶中展示复杂选项：降级为最多两个简短选项
-    if vehicle_state == "driving_simulated" and action == "read" \
-            and parameters.get("option_count", 1) > 2:
+    if (vehicle_state == "driving_simulated" and action == "read"
+            and parameters.get("option_count", 1) > 2):
         return PolicyDecision(decision="degrade", reason_code="driving_degrade_options",
                               detail="行驶中（模拟）降级为最多两个简短选项")
 
@@ -102,10 +98,6 @@ def evaluate(
     return PolicyDecision(decision="confirm", reason_code="default_write_confirm",
                           detail="默认写操作需确认")
 
-
-# ---------------------------------------------------------------------------
-# 工具调用级检查（Planner 输出 → Policy Gate）
-# ---------------------------------------------------------------------------
 
 def check_tool_call(tool_call: Any, state: Any) -> PolicyDecision:
     """对单次工具调用做参数级授权。
@@ -146,10 +138,6 @@ def check_tool_call(tool_call: Any, state: Any) -> PolicyDecision:
     return evaluate(subject=subject, resource=resource, action=action,
                     environment=environment, parameters=parameters)
 
-# ---------------------------------------------------------------------------
-# 工具返回文本的 prompt-injection 检查
-# ---------------------------------------------------------------------------
-
 _INJECTION_PATTERNS = [
     r"忽略.{0,10}(规则|指令|系统)",
     r"ignore.{0,20}(rule|instruction|system)",
@@ -169,10 +157,6 @@ def scan_tool_text(text: str) -> bool:
         return False
     return bool(_INJECTION_RE.search(text))
 
-
-# ---------------------------------------------------------------------------
-# Memory Gate：候选记忆 → write / reject / request_confirm
-# ---------------------------------------------------------------------------
 
 def evaluate_memory_candidate(candidate: dict[str, Any]) -> PolicyDecision:
     """Memory Gate：决定一条候选记忆的去向。

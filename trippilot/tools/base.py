@@ -33,7 +33,6 @@ class BaseTool:
             return self._run_live(call)
         return self._run_recorded(call)
 
-    # -- recorded ---------------------------------------------------------
     def _fixture_path(self, call: ToolCall) -> Path:
         key = call.args.get("fixture", "default")
         return FIXTURES_DIR / f"{self.name}_{key}.json"
