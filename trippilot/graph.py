@@ -188,9 +188,30 @@ def build_graph(llm: LLMClient | None = None,
         decisions: list[PolicyDecision] = []
         for call in state.pending_tool_calls:
             decisions.append(check_tool_call(call, state))
+
+        calls: list[ToolCall] = []
+        degraded: list[dict[str, Any]] = []
+        for call, decision in zip(state.pending_tool_calls, decisions):
+            if decision.decision != "degrade":
+                calls.append(call)
+                continue
+            args = dict(call.args)
+            before = args.get("option_count")
+            args["option_count"] = 2
+            calls.append(ToolCall(tool=call.tool, args=args,
+                                  source=call.source))
+            degraded.append({"tool": call.tool,
+                             "parameter": "option_count",
+                             "from": before, "to": 2})
+
         upd = _trace(state, "policy_gate", "decisions_made",
                      {"decisions": [d.model_dump() for d in decisions]})
+        if degraded:
+            upd["trace"].append(TraceEvent(
+                node="policy_gate", event="degraded_params",
+                payload={"changes": degraded}))
         upd["policy_decisions"] = decisions
+        upd["pending_tool_calls"] = calls
         kinds = {d.decision for d in decisions}
         if "deny" in kinds:
             upd["route_after_policy"] = "deny"

@@ -37,7 +37,24 @@ class MapTool(BaseTool):
     def _run_recorded(self, call: ToolCall) -> ToolResult:
         if call.tool not in self.supported_operations:
             return _unsupported_operation(call)
-        return super()._run_recorded(call)
+        result = super()._run_recorded(call)
+        if not result.ok or call.tool != "map.route":
+            return result
+
+        option_count = call.args.get("option_count")
+        if not isinstance(option_count, int) or isinstance(option_count, bool):
+            return result
+        if option_count < 1:
+            return result
+
+        routes = result.data.get("routes", [])
+        for route in routes:
+            options = route.get("options", [])
+            route["options"] = sorted(
+                options,
+                key=lambda option: option.get("duration_min", float("inf")),
+            )[:option_count]
+        return result
 
 
 # ---------------------------------------------------------------------------

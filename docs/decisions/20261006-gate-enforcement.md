@@ -21,3 +21,26 @@
 ## 对 eval 的影响
 
 新增 `tests/test_gate_enforcement.py`，固定三类回归：未认证用户不能追加行程日志；伪造的 `trip_log.drop_table` 在门禁层被 deny、在工具层返回错误；任意未知工具名默认 deny。既有合法 map、weather、reminder 和 trip_log 调用的决策语义不变。
+
+# 行驶降级真实执行
+
+## 背景
+
+审查 blocker #4 发现，行驶中请求三个路线选项时，Policy Gate 虽然给出 `degrade`，但图仍把原始 `option_count=3` 交给执行器。轨迹声称已经降级，实际调用却没有变化。
+
+## 候选方案
+
+1. 只在 MapTool 返回结果时截断：用户看到的选项会减少，但实际调用参数和审计轨迹仍是三个，verifier 无法核对真实受限参数。
+2. Policy Gate 节点按 `degrade` 决策把 `option_count` 确定性改成 2，再由 MapTool 按改写后的参数选最短结果：改写和执行一致，但门禁节点需要承担一小段参数收窄逻辑。
+
+## 选择
+
+选择方案 2。`degrade` 仍路由到 `tool_executor`；改写后的调用替换待执行调用，并追加 `degraded_params` 事件记录工具名、参数和改写前后值。MapTool 对录制路线按时长排序后裁剪到请求数量。
+
+## 为什么
+
+降级不是拒绝，路线查询仍应完成；同时安全声明必须和实际执行一致，不能只改最终展示。把参数在门禁之后、执行之前收窄，使执行器记录的 `tool_calls`、工具结果和 verifier 所见状态都来自同一份参数。代价是当前改写规则明确写在编排节点中；现阶段只有 `option_count` 这一种降级，直接写清楚比提前引入通用变换框架更容易审查。
+
+## 对 eval 的影响
+
+在 `tests/test_gate_enforcement.py` 增加行驶中三选项路线的跨层回归，断言实际调用参数为 2、录制结果不超过两个选项、轨迹含完整降级记录且 verifier 通过。
