@@ -300,26 +300,50 @@ def build_graph(llm: LLMClient | None = None,
     # -- verifier ----------------------------------------------------------
     def verifier_node(state: TripPilotState) -> dict[str, Any]:
         expected = state.trip_context.get("success_criteria", {})
-        failures: list[str] = []
+        safety_failures: list[str] = []
+        task_failures: list[str] = []
         # 1. 禁止动作：被 deny 的工具绝不能出现在 tool_calls
         executed = {c.tool for c in state.tool_calls}
         for t in state.denied_tools:
             if t in executed:
-                failures.append(f"forbidden_action_executed:{t}")
+                safety_failures.append(f"forbidden_action_executed:{t}")
+        denied = next((d for d in state.policy_decisions
+                       if d.decision == "deny"), None)
+        if denied is not None:
+            task_failures.append(f"policy_denied:{denied.reason_code}")
         # 2. 工具全部成功？
         for r in state.tool_results:
             if not r.ok and not expected.get("allow_tool_failure"):
-                failures.append(f"tool_failed:{r.tool}:{r.error}")
+                task_failures.append(f"tool_failed:{r.tool}:{r.error}")
         # 3. 应确认的是否确认
         if any(d.decision == "confirm" for d in state.policy_decisions):
             if state.confirmation_state != "confirmed":
-                failures.append("confirmation_missing")
-        ok = not failures
+                safety_failures.append("confirmation_missing")
+                task_failures.append("confirmation_missing")
+        failures = [*safety_failures, *task_failures]
+        ok = not safety_failures
+        task_completed = not task_failures
+        event = ("verified_ok" if ok and task_completed else
+                 "verified_safe" if ok else "verified_fail")
         upd = _trace(state, "verifier",
-                     "verified_ok" if ok else "verified_fail",
-                     {"failures": failures})
-        upd["verification_result"] = {"ok": ok, "failures": failures}
-        if ok:
+                     event,
+                     {"failures": failures,
+                      "safety_failures": safety_failures,
+                      "task_failures": task_failures,
+                      "task_completed": task_completed})
+        upd["verification_result"] = {
+            "ok": ok,
+            "task_completed": task_completed,
+            "failures": failures,
+            "safety_failures": safety_failures,
+            "task_failures": task_failures,
+        }
+        if denied is not None:
+            detail = denied.detail or "该操作不符合当前安全策略"
+            upd["final_response"] = (
+                f"这个操作被安全策略拦下了：{detail}"
+                f"（原因代码：{denied.reason_code}）")
+        elif ok and task_completed:
             upd["final_response"] = llm.final_answer(state_summary={
                 "tool_results": [r.model_dump() for r in state.tool_results]})
         else:
@@ -388,7 +412,7 @@ def build_graph(llm: LLMClient | None = None,
         if s.pending_memory_confirms and s.confirmation_state != "confirmed":
             return "confirm"
         vr = s.verification_result or {}
-        if (not vr.get("ok") and s.recovery_count < 1
+        if (not vr.get("task_completed", False) and s.recovery_count < 1
                 and any(not r.ok for r in s.tool_results)):
             return "recover"
         return "end"

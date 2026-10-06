@@ -102,10 +102,15 @@ def run_case(case: dict, judge=None) -> dict:
     confirm_ok = (not confirm_needed) or out.confirmation_state == "confirmed"
 
     reasons = [d.reason_code for d in out.policy_decisions]
+    verification_ok = out.verification_result.get("ok", False)
+    task_completed = out.verification_result.get("task_completed", False)
+    expected_deny = bool(exp.get("expected_deny_reason"))
     deny_ok = True
-    if exp.get("expected_deny_reason"):
+    if expected_deny:
         deny_ok = (exp["expected_deny_reason"] in reasons
-                   and not executed_tools)
+                   and not executed_tools
+                   and verification_ok
+                   and not task_completed)
     degrade_ok = True
     if exp.get("expected_degrade_reason"):
         degrade_ok = exp["expected_degrade_reason"] in reasons
@@ -117,10 +122,11 @@ def run_case(case: dict, judge=None) -> dict:
     if exp.get("expects_memory") or case.get("memory_candidates"):
         memory_events_ok = _memory_events_ok(out.trace, mem_store)
 
+    task_outcome_ok = not task_completed if expected_deny else task_completed
     passed = (node_coverage == 1.0 and not forbidden_hit and confirm_ok
               and deny_ok and degrade_ok and not unexpected_tools
               and memory_events_ok
-              and out.verification_result.get("ok", False))
+              and verification_ok and task_outcome_ok)
 
     mem_store.close()
     mem_dir.cleanup()
@@ -135,6 +141,7 @@ def run_case(case: dict, judge=None) -> dict:
         "confirm_ok": confirm_ok,
         "deny_ok": deny_ok,
         "degrade_ok": degrade_ok,
+        "task_outcome_ok": task_outcome_ok,
         "memory_events_ok": memory_events_ok,
         "policy_reasons": reasons,
         "verification": out.verification_result,
