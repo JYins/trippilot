@@ -1,7 +1,8 @@
-"""FastAPI Session API。
+"""FastAPI Session API（单用户本地模式，无认证）。
 
 - 会话管理 / trace_id / 请求校验 / 脱敏日志
-- 日志中不记录精确家庭住址、提醒正文等敏感字段（见 _redact）
+- 所有请求固定使用 local 记忆命名空间，不提供多用户身份保证
+- 请求原文不落日志，其他日志文本统一遮盖手机号、生日和地址
 """
 
 from __future__ import annotations
@@ -15,12 +16,12 @@ from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .graph import build_graph, new_state, run_graph
 from .llm import make_llm
 from .memory.store import DEFAULT_PATH, PreferenceStore
-from .state import ASRResult
+from .state import ASRResult, VehicleState
 
 log = logging.getLogger("trippilot.api")
 
@@ -29,6 +30,12 @@ app = FastAPI(title="TripPilot 途行智驾", version="0.1.0")
 _graph = None
 _pending_memory_confirms: dict[str, dict[str, dict[str, Any]]] = {}
 _pending_memory_lock = Lock()
+
+LOCAL_USER_ATTRIBUTES = {
+    "user_id": "local",
+    "authenticated": False,
+    "role": "local",
+}
 
 
 def get_graph():
@@ -44,8 +51,29 @@ def get_graph():
 # ---------------------------------------------------------------------------
 
 _SENSITIVE_KEYS = {"home_address", "exact_address", "contact", "phone",
-                   "reminder_content", "calendar_body",
-                   "content"}  # 记忆偏好正文（可能含家庭住址），日志里脱敏
+                   "reminder_content", "calendar_body", "content"}
+_PII_PATTERNS = (
+    (re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"), "***phone***"),
+    (re.compile(
+        r"(?:生日(?:是|为|[:：])?|出生日期(?:是|为|[:：])?)\s*"
+        r"(?:19|20)\d{2}[年/-]\d{1,2}[月/-]\d{1,2}日?"
+    ), "***birthday***"),
+    (re.compile(
+        r"(?:我家住在|住址(?:是|为|[:：])?|地址(?:是|为|[:：])?)"
+        r"[^，。；;\n]{2,}"
+    ), "***address***"),
+    (re.compile(
+        r"[\u4e00-\u9fff]{2,}(?:省|市|区|县|街道|路|街|巷|小区|大厦)"
+        r"[^，。；;\n]*"
+    ), "***address***"),
+)
+
+
+def _redact_text(value: str) -> str:
+    redacted = value
+    for pattern, replacement in _PII_PATTERNS:
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
 
 
 def _redact(obj: Any) -> Any:
@@ -54,9 +82,20 @@ def _redact(obj: Any) -> Any:
                 for k, v in obj.items()}
     if isinstance(obj, list):
         return [_redact(v) for v in obj]
-    if isinstance(obj, str) and re.search(r"[\u4e00-\u9fff]{2,}.*\d+号", obj):
-        return "***address***"
+    if isinstance(obj, str):
+        return _redact_text(obj)
     return obj
+
+
+def _request_log(req: "TurnRequest") -> dict[str, Any]:
+    payload = req.model_dump()
+    for field_name in ("text", "asr_text"):
+        value = payload[field_name]
+        payload[field_name] = {
+            "length": len(value),
+            "sha1": sha1(value.encode("utf-8")).hexdigest()[:12],
+        }
+    return _redact(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -67,10 +106,10 @@ class TurnRequest(BaseModel):
     session_id: str | None = None
     text: str = ""                      # 文本输入
     asr_text: str = ""                  # 或语音转写文本
-    asr_confidence: float = 1.0
+    asr_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     asr_measured: bool = False          # 是否真实录音测得
-    vehicle_state: str = "parked_simulated"
-    trip_context: dict[str, Any] = {}
+    vehicle_state: VehicleState = "parked_simulated"
+    trip_context: dict[str, Any] = Field(default_factory=dict)
     confirm: bool = False               # 用户确认（human_confirm 回填）
     confirm_nonce: str | None = None
     clarify_answer: str = ""            # 用户澄清回答回填
@@ -127,7 +166,7 @@ def _save_pending_memory(session_id: str,
 
 @app.post("/turn", response_model=TurnResponse)
 def turn(req: TurnRequest) -> TurnResponse:
-    log.info("turn request: %s", _redact(req.model_dump()))
+    log.info("turn request: %s", _request_log(req))
     restored_candidates: list[dict[str, Any]] = []
     if req.confirm:
         if not req.confirm_nonce:
@@ -149,11 +188,10 @@ def turn(req: TurnRequest) -> TurnResponse:
     state = new_state(session_id=req.session_id,
                       user_request=req.text or req.asr_text,
                       asr_result=asr,
-                      vehicle_state=req.vehicle_state,  # type: ignore
+                      vehicle_state=req.vehicle_state,
                       trip_context=ctx,
                       pending_memory_confirms=restored_candidates,
-                      user_attributes={"user_id": "owner", "authenticated": True,
-                                       "role": "owner"})
+                      user_attributes=dict(LOCAL_USER_ATTRIBUTES))
     out = run_graph(get_graph(), state)
     needs_input = out.confirmation_state == "pending" or out.stop_after_clarify
     pending_memory = []
@@ -175,4 +213,9 @@ def turn(req: TurnRequest) -> TurnResponse:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "version": "0.1.0"}
+    return {
+        "status": "ok",
+        "version": "0.1.0",
+        "mode": "single_user_local",
+        "authentication": "none",
+    }

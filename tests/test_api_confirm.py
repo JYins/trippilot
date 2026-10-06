@@ -52,8 +52,8 @@ def test_forged_candidate_body_is_ignored(api_service):
     )
 
     assert response["confirmation_state"] == "confirmed"
-    assert store.recall("owner", "攻击者伪造地址") == []
-    saved = store.recall("owner", "望京XX小区")
+    assert store.recall("local", "攻击者伪造地址") == []
+    saved = store.recall("local", "望京XX小区")
     assert saved and saved[0].content == "我家住在望京XX小区"
 
 
@@ -96,5 +96,5 @@ def test_normal_confirmation_uses_server_snapshot(api_service):
                      confirm=True, confirm_nonce=item["nonce"])
 
     assert response["confirmation_state"] == "confirmed"
-    saved = store.recall("owner", "望京XX小区")
+    saved = store.recall("local", "望京XX小区")
     assert saved and saved[0].content == item["content"]
