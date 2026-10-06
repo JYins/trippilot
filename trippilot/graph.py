@@ -60,6 +60,22 @@ def _render_clarify_question(asr: ASRResult, low_conf: bool) -> str:
     return "没太确定你的意思，能再具体说一下吗？"
 
 
+def _match_place_answer(asr: ASRResult, answer: object) -> str | None:
+    """返回答案唯一对应的标准地点名；无匹配或仍有歧义时返回 None。"""
+    text = str(answer).strip()
+    if not text:
+        return None
+    names = [str(p.get("name", "")).strip()
+             for p in asr.place_entities if p.get("name")]
+    exact = [name for name in names if text == name]
+    if len(exact) == 1:
+        return exact[0]
+    partial = [name for name in names if text in name or name in text]
+    if len(partial) == 1:
+        return partial[0]
+    return None
+
+
 def _insert_candidate(store: PreferenceStore, uid: str,
                       cand: dict[str, Any]) -> str:
     """Gate 已通过（或上一轮已判 confirm 且用户已确认）后的直接写盘。"""
@@ -147,26 +163,35 @@ def build_graph(llm: LLMClient | None = None,
                 need_clarify = True
                 names = [p.get("name", "?") for p in asr.place_entities]
                 reasons.append(f"place_ambiguity({','.join(names)})")
-        # 测试/非交互模式：trip_context 可预置 clarify_answer 直接通过
+        # 测试/非交互模式：trip_context 可预置 clarify_answer，但仍须绑定原选项
         answer = state.trip_context.get("clarify_answer")
         upd = _trace(state, "clarify", "clarify_checked",
                      {"need_clarify": need_clarify, "reasons": reasons})
-        if need_clarify and not answer:
+        matched_place = _match_place_answer(asr, answer) if asr else None
+        if need_clarify and not matched_place:
             upd["confirmation_state"] = "pending"
             # 追问走确定性模板：reason code 只进 trace，用户听到人话
             upd["final_response"] = _render_clarify_question(asr, low_conf)
             upd["stop_after_clarify"] = True  # 内部标记：等待用户回答
-        elif answer:
+        elif need_clarify:
             upd["trip_context"] = {**state.trip_context,
-                                   "clarify_resolved": answer}
+                                   "clarify_resolved": matched_place,
+                                   "destination": matched_place}
+            upd["stop_after_clarify"] = False
         return upd
 
     # -- planner ---------------------------------------------------------
     def planner_node(state: TripPilotState) -> dict[str, Any]:
         t0 = time.time()
+        preferences = [
+            {"kind": pref.get("kind", "other"),
+             "content": pref.get("content", "")}
+            for pref in state.preferences[:3]
+        ]
         steps = llm.plan(intent=state.intent,
                          context={"session_id": state.session_id,
-                                  **state.trip_context},
+                                  **state.trip_context,
+                                  "preferences": preferences},
                          available_tools=["map.route", "weather.now",
                                           "reminder.create", "trip_log.append"])
         plan = [PlanStep(step_id=s.get("step_id", f"s{i}"),
