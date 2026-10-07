@@ -153,8 +153,11 @@ def _route_args(text: str, context: dict[str, Any],
 
 def _weather_item(text: str, context: dict[str, Any],
                   place_names: list[str], *,
-                  force_forecast: bool = False) -> tuple[str, dict[str, Any], str]:
-    forecast = force_forecast or _has_future_time(text)
+                  force_forecast: bool = False,
+                  future_ok: bool = True) -> tuple[str, dict[str, Any], str]:
+    # 辅助性天气提及（"结合天气"）只查当前天气：老用例契约如此，
+    # 预报语义只给"明确问未来天气"和"长途规划"两种强信号。
+    forecast = force_forecast or (future_ok and _has_future_time(text))
     tool = "weather.forecast" if forecast else "weather.now"
     description = "查询天气预报" if forecast else "查询当前天气"
     args = {
@@ -187,7 +190,8 @@ def _travel_items(text: str, context: dict[str, Any],
 
     weather_added = any(tool.startswith("weather.") for tool, _, _ in items)
     if _has_weather_words(text) and not weather_added:
-        items.append(_weather_item(text, context, place_names))
+        items.append(_weather_item(text, context, place_names,
+                                   future_ok=False))
     return items
 
 

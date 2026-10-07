@@ -132,6 +132,19 @@ def test_restriction_does_not_invent_plate_or_date():
     assert steps[0]["args"] == {"city": "天津", "fixture": "tianjin"}
 
 
+def test_auxiliary_weather_mention_stays_now():
+    # "结合天气"只是辅助信息，不触发预报；预报只给明确的未来天气问句和长途规划。
+    steps = _plan(
+        "明天下午去中关村面试，结合天气帮我看看几点出发",
+        destination="中关村",
+        area="海淀区",
+    )
+
+    tools = [step["tool"] for step in steps]
+    assert "weather.now" in tools
+    assert "weather.forecast" not in tools
+
+
 def test_media_and_vehicle_controls_follow_requested_order():
     steps = _plan("换首歌，声音调低，空调调低，关天窗")
 
