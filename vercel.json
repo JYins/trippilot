@@ -1,6 +1,1 @@
-// 本次只部署 web/ 静态页面，后端另行部署（如 HF Spaces），用 ?api= 指向后端。
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "outputDirectory": "web"
-}
+{"$schema":"https://openapi.vercel.sh/vercel.json","framework":null,"outputDirectory":"web"}
