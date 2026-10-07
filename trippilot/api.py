@@ -13,10 +13,12 @@ import secrets
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from hashlib import sha1
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .graph import build_graph, new_state, run_graph
@@ -143,6 +145,7 @@ class TurnResponse(BaseModel):
     policy_decisions: list[dict[str, Any]]
     verification: dict[str, Any]
     pending_memory_confirms: list[PendingMemoryConfirm]
+    trace: list[dict[str, Any]] | None = None
 
 
 def _take_pending_memory(session_id: str | None,
@@ -222,8 +225,10 @@ def turn(req: TurnRequest) -> TurnResponse:
         visited_nodes=out.visited_nodes,
         policy_decisions=[d.model_dump() for d in out.policy_decisions],
         verification=out.verification_result,
-        pending_memory_confirms=pending_memory)
-    log.info("turn response: %s", _redact(resp.model_dump()))
+        pending_memory_confirms=pending_memory,
+        trace=[event.model_dump() for event in getattr(out, "trace", [])])
+    log.info("turn response: %s", _redact(
+        resp.model_dump(exclude={"trace"})))
     return resp
 
 
@@ -235,3 +240,7 @@ def health() -> dict[str, str]:
         "mode": "single_user_local",
         "authentication": "none",
     }
+
+
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
