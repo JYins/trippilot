@@ -37,6 +37,206 @@ class ScriptedLLM(LLMClient):
         return "脚本执行完成。"
 
 
+def _contains_any(text: str, words: tuple[str, ...]) -> bool:
+    return any(word in text for word in words)
+
+
+def _is_knowledge_question(text: str) -> bool:
+    # 解释性疑问把地点当话题；例如“798为什么叫798”不能被地点实体带去导航。
+    return _contains_any(
+        text, ("为什么", "是什么", "介绍一下", "讲讲", "怎么来的", "什么意思"))
+
+
+def _has_weather_words(text: str) -> bool:
+    return _contains_any(text, ("天气", "气温", "下雨", "下雪", "几度"))
+
+
+def _is_weather_question(text: str) -> bool:
+    # 天气疑问是在收集出行决策信息；例如“一会儿去河边，天气怎么样”不是导航命令。
+    question_words = ("怎么样", "如何", "好不好", "会不会")
+    return _has_weather_words(text) and _contains_any(text, question_words)
+
+
+def _is_navigation_request(text: str, has_destination: bool) -> bool:
+    # 明确路线问法本身足以表达导航；例如“还有多久”可沿用上下文目的地。
+    explicit_words = (
+        "导航", "路线", "怎么去", "怎么走", "几点出发", "几点到",
+        "几点能到", "还有多远", "还有多久",
+    )
+    if _contains_any(text, explicit_words):
+        return True
+    # 单独的“去”容易出现在闲聊里；例如“去那个河边”无实体时不能猜目的地。
+    return "去" in text and has_destination
+
+
+def _has_future_time(text: str) -> bool:
+    # 明确未来时间才查预报；例如只问“天气几度”仍查当前天气。
+    return _contains_any(
+        text, ("未来", "一会儿", "等会儿", "待会儿", "明天", "后天", "下周", "小时"))
+
+
+def _is_restriction_request(text: str) -> bool:
+    # 限行咨询不代表已知车牌；例如“今天限号吗”只能查询城市规则。
+    return _contains_any(text, ("限号", "限行", "尾号"))
+
+
+def _is_reminder_request(text: str) -> bool:
+    # 只有明确说“提醒”才创建副作用；例如提到明天本身不创建提醒。
+    return "提醒" in text
+
+
+def _is_media_next_request(text: str) -> bool:
+    # 换曲只响应常见播放指令；例如“这首歌叫什么”不能切歌。
+    return _contains_any(text, ("换歌", "换首歌", "切歌", "下一首"))
+
+
+def _is_volume_request(text: str) -> bool:
+    # 音量控制需要明确指向声音；例如“空调调小”不能连带降低音量。
+    return _contains_any(text, ("音量", "声音"))
+
+
+def _is_climate_request(text: str) -> bool:
+    # 空调动作只由空调词触发；例如单说“有点热”不替用户操作车辆。
+    return "空调" in text
+
+
+def _is_sunroof_request(text: str) -> bool:
+    # 天窗动作只由天窗词触发；例如普通的“打开”没有足够控制对象。
+    return "天窗" in text
+
+
+def _place_names(context: dict[str, Any]) -> list[str]:
+    names = context.get("place_names", [])
+    if not isinstance(names, list):
+        return []
+    return [name for name in names if isinstance(name, str) and name]
+
+
+def _destination(context: dict[str, Any], place_names: list[str]) -> str:
+    destination = context.get("destination")
+    if isinstance(destination, str) and destination:
+        return destination
+    # 局部澄清不能脱离原地点使用；例如实体“文化园”比单独的“南门”更可落地。
+    if place_names:
+        return place_names[0]
+    clarified = context.get("clarify_resolved")
+    if isinstance(clarified, str) and clarified:
+        return clarified
+    return ""
+
+
+def _weather_area(context: dict[str, Any], place_names: list[str]) -> str:
+    # 调用方声明的区域与录制数据绑定；例如已有 area 时不能被目的地覆盖。
+    for candidate in (context.get("area"), context.get("destination")):
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return place_names[0] if place_names else "海淀区"
+
+
+def _route_args(text: str, context: dict[str, Any],
+                destination: str) -> dict[str, Any]:
+    enroute = _contains_any(text, ("还有多远", "还有多久"))
+    driving = str(context.get("vehicle_state", "")).startswith("driving")
+    # 在途问题从车辆当前模拟位置计算；例如不能继续把“家里”当起点。
+    origin = "当前位置" if enroute or driving else context.get("origin", "")
+    args = {
+        "origin": origin,
+        "destination": destination,
+        "fixture": context.get("map_fixture", "default"),
+        "option_count": context.get("option_count", 1),
+    }
+    # 偏好来自用户上下文；例如不能因“去市区”自行补成避开拥堵。
+    if "route_pref" in context:
+        args["route_pref"] = context["route_pref"]
+    return args
+
+
+def _weather_item(text: str, context: dict[str, Any],
+                  place_names: list[str], *,
+                  force_forecast: bool = False) -> tuple[str, dict[str, Any], str]:
+    forecast = force_forecast or _has_future_time(text)
+    tool = "weather.forecast" if forecast else "weather.now"
+    description = "查询天气预报" if forecast else "查询当前天气"
+    args = {
+        "area": _weather_area(context, place_names),
+        "fixture": context.get("weather_fixture", "default"),
+    }
+    return tool, args, description
+
+
+def _number_steps(
+        items: list[tuple[str, dict[str, Any], str]]) -> list[dict[str, Any]]:
+    return [
+        {"step_id": f"s{index}", "tool": tool, "args": args,
+         "description": description}
+        for index, (tool, args, description) in enumerate(items, start=1)
+    ]
+
+
+def _travel_items(text: str, context: dict[str, Any],
+                  place_names: list[str]) -> list[tuple[str, dict[str, Any], str]]:
+    items: list[tuple[str, dict[str, Any], str]] = []
+    destination = _destination(context, place_names)
+    if _is_navigation_request(text, bool(destination)):
+        items.append(("map.route", _route_args(text, context, destination),
+                      "查询路线"))
+        # 长途规划需要天气辅助决策；例如“下周自驾去外地”不能只给路线。
+        if _contains_any(text, ("规划", "自驾")):
+            items.append(_weather_item(
+                text, context, place_names, force_forecast=True))
+
+    weather_added = any(tool.startswith("weather.") for tool, _, _ in items)
+    if _has_weather_words(text) and not weather_added:
+        items.append(_weather_item(text, context, place_names))
+    return items
+
+
+def _query_and_reminder_items(
+        text: str, context: dict[str, Any]
+) -> list[tuple[str, dict[str, Any], str]]:
+    items: list[tuple[str, dict[str, Any], str]] = []
+    if _is_restriction_request(text):
+        items.append((
+            "restriction.query",
+            {"city": context.get("city", "北京"),
+             "fixture": context.get("restriction_fixture", "default")},
+            "查询限行",
+        ))
+    if _is_reminder_request(text):
+        items.append((
+            "reminder.create",
+            {"content": context.get("reminder_content", ""),
+             "time": context.get("reminder_time", ""),
+             "session_id": context.get("session_id", "")},
+            "创建提醒",
+        ))
+    return items
+
+
+def _media_items(text: str) -> list[tuple[str, dict[str, Any], str]]:
+    items: list[tuple[str, dict[str, Any], str]] = []
+    if _is_media_next_request(text):
+        items.append(("media.next", {}, "切换到下一首"))
+    if _is_volume_request(text):
+        quieter = _contains_any(text, ("小", "低", "轻", "降", "调小", "静音"))
+        action = "decrease" if quieter else "increase"
+        items.append(("media.volume", {"action": action}, "调整音量"))
+    return items
+
+
+def _vehicle_items(text: str) -> list[tuple[str, dict[str, Any], str]]:
+    items: list[tuple[str, dict[str, Any], str]] = []
+    if _is_climate_request(text):
+        quieter = _contains_any(text, ("小", "低", "轻", "调小", "关小", "调低"))
+        # 未出现调小词时默认调大；例如“热，空调开大”应保持 increase_ac。
+        action = "decrease_ac" if quieter else "increase_ac"
+        items.append(("vehicle.climate", {"action": action}, "调整空调"))
+    if _is_sunroof_request(text):
+        action = "close" if "关" in text else "open"
+        items.append(("vehicle.sunroof", {"action": action}, "控制天窗"))
+    return items
+
+
 class DeterministicStub(LLMClient):
     """确定性 stub：按关键词规则生成 plan，用于无 key 跑通主循环与回归。
 
@@ -46,62 +246,24 @@ class DeterministicStub(LLMClient):
 
     def plan(self, *, intent: str, context: dict[str, Any],
              available_tools: list[str]) -> list[dict[str, Any]]:
-        steps: list[dict[str, Any]] = []
         text = intent
-        if any(k in text for k in ("路线", "导航", "怎么去", "几点出发")):
-            steps.append({"step_id": "s1", "tool": "map.route",
-                          "args": {"origin": context.get("origin", ""),
-                                   "destination": context.get("destination", ""),
-                                   # 录制 fixture 按目的地分文件：用例在 context 里声明
-                                   # map_fixture，缺省 default；和 fixture 的 expect
-                                   # 段一起保证"请求和录制数据对得上"
-                                   "fixture": context.get("map_fixture", "default"),
-                                   "option_count": context.get("option_count", 1)},
-                          "description": "查询路线"})
-        if any(k in text for k in ("天气",)):
-            steps.append({"step_id": "s2", "tool": "weather.now",
-                          "args": {"area": context.get("area", "海淀区"),
-                                   "fixture": "default"},
-                          "description": "查询天气"})
-        if any(k in text for k in ("提醒",)):
-            steps.append({"step_id": "s3", "tool": "reminder.create",
-                          "args": {"content": context.get("reminder_content", ""),
-                                   "time": context.get("reminder_time", ""),
-                                   "session_id": context.get("session_id", "")},
-                          "description": "创建提醒"})
-        if any(k in text for k in ("限号", "限行")):
-            steps.append({"step_id": f"s{len(steps) + 1}",
-                          "tool": "restriction.query",
-                          "args": {"city": "北京",
-                                   "fixture": context.get(
-                                       "restriction_fixture", "default")},
-                          "description": "查询限行"})
-        if any(k in text for k in ("换歌", "换首歌", "切歌", "下一首")):
-            steps.append({"step_id": f"s{len(steps) + 1}",
-                          "tool": "media.next", "args": {},
-                          "description": "切下一首"})
-        if any(k in text for k in ("音量", "声音")):
-            quieter = any(k in text for k in ("小", "低", "轻", "降", "调小"))
-            action = "decrease" if quieter else "increase"
-            steps.append({"step_id": f"s{len(steps) + 1}",
-                          "tool": "media.volume", "args": {"action": action},
-                          "description": "调音量"})
-        if "空调" in text:
-            quieter = any(k in text for k in ("小", "低", "调小", "关小"))
-            action = "decrease_ac" if quieter else "increase_ac"
-            steps.append({"step_id": f"s{len(steps) + 1}",
-                          "tool": "vehicle.climate", "args": {"action": action},
-                          "description": "调空调"})
-        if "天窗" in text:
-            action = "close" if "关" in text else "open"
-            steps.append({"step_id": f"s{len(steps) + 1}",
-                          "tool": "vehicle.sunroof", "args": {"action": action},
-                          "description": "控制天窗"})
-        if "为什么" in text:
-            steps.append({"step_id": f"s{len(steps) + 1}",
-                          "tool": "knowledge.qa", "args": {"question": text},
-                          "description": "知识问答"})
-        return steps
+        place_names = _place_names(context)
+
+        if _is_knowledge_question(text):
+            return _number_steps([(
+                "knowledge.qa",
+                {"question": text,
+                 "fixture": context.get("knowledge_fixture", "default")},
+                "回答知识问题",
+            )])
+        if _is_weather_question(text):
+            return _number_steps([_weather_item(text, context, place_names)])
+
+        items = _travel_items(text, context, place_names)
+        items.extend(_query_and_reminder_items(text, context))
+        items.extend(_media_items(text))
+        items.extend(_vehicle_items(text))
+        return _number_steps(items)
 
     def final_answer(self, *, state_summary: dict[str, Any]) -> str:
         results = state_summary.get("tool_results", [])
