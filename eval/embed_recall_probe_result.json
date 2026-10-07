@@ -1,0 +1,25 @@
+{
+  "FastEmbed/bge-small-en-v1.5": {
+    "n_probes": 21,
+    "recall@3": 0.857,
+    "recall@5": 0.905,
+    "mean_rank": 1.37,
+    "missed": [
+      "去机场",
+      "机场"
+    ],
+    "single_embed_s": 0.0136,
+    "batch_embed_21q_s": 0.1792,
+    "e2e_21q_recall_s": 0.2119
+  },
+  "BGE/bge-small-zh-v1.5": {
+    "n_probes": 21,
+    "recall@3": 1.0,
+    "recall@5": 1.0,
+    "mean_rank": 1.05,
+    "missed": [],
+    "single_embed_s": 0.0175,
+    "batch_embed_21q_s": 0.1735,
+    "e2e_21q_recall_s": 0.4848
+  }
+}
