@@ -7,6 +7,10 @@ from typing import Any
 
 from ..state import ToolCall, ToolResult
 from .base import BaseTool, ToolError
+from .knowledge import KnowledgeTool
+from .media import MediaTool
+from .restriction import RestrictionTool
+from .vehicle import VehicleTool
 
 class MapTool(BaseTool):
     name = "map"
@@ -177,6 +181,10 @@ TOOLS: dict[str, BaseTool] = {
     "weather": WeatherTool(),
     "reminder": ReminderTool(),
     "trip_log": TripLogTool(),
+    "media": MediaTool(),
+    "vehicle": VehicleTool(),
+    "restriction": RestrictionTool(),
+    "knowledge": KnowledgeTool(),
 }
 
 
@@ -188,4 +196,5 @@ def get_tool(name: str) -> BaseTool:
 
 
 __all__ = ["TOOLS", "get_tool", "ToolError", "BaseTool",
-           "MapTool", "WeatherTool", "ReminderTool", "TripLogTool"]
+           "MapTool", "WeatherTool", "ReminderTool", "TripLogTool",
+           "MediaTool", "VehicleTool", "RestrictionTool", "KnowledgeTool"]
