@@ -7,136 +7,177 @@
   <style>
     :root {
       color-scheme: light;
-      --ink: #15211d;
-      --muted: #68756f;
-      --paper: #fffdf8;
-      --line: #dce4df;
+      --ink: #17211d;
+      --muted: #66736d;
+      --page: #f5f6f4;
+      --paper: #fff;
+      --line: #dce2de;
       --green: #176b4d;
-      --green-soft: #e7f2ec;
-      --amber: #a45d12;
-      --amber-soft: #fff0d9;
-      --shadow: 0 16px 42px rgba(24, 48, 39, .09);
+      --green-soft: #eaf3ee;
+      --danger: #a54b2a;
+      --danger-soft: #fbede7;
+      --amber: #996116;
+      --amber-soft: #fff3df;
+      --shadow: 0 14px 36px rgba(24, 45, 36, .07);
     }
-
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: var(--ink);
-      background: radial-gradient(circle at top left, #e8f2eb 0, transparent 34rem), #f3f1ea;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "PingFang SC", sans-serif;
+      background: var(--page);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     button, input { font: inherit; }
     button { cursor: pointer; }
     button:disabled { cursor: wait; opacity: .58; }
-    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding-bottom: 36px; }
+    .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding-bottom: 44px; }
     .topbar {
       position: sticky;
       top: 0;
       z-index: 5;
-      margin: 0 -16px;
-      padding: 18px 16px 14px;
-      background: rgba(243, 241, 234, .92);
-      border-bottom: 1px solid rgba(120, 134, 126, .2);
-      backdrop-filter: blur(16px);
+      margin: 0 -20px;
+      padding: 20px;
+      background: rgba(245, 246, 244, .94);
+      border-bottom: 1px solid rgba(118, 132, 124, .18);
+      backdrop-filter: blur(14px);
     }
-    .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 13px; }
     .mark {
       display: grid;
       width: 42px;
       height: 42px;
       place-items: center;
-      border-radius: 14px;
+      border-radius: 12px;
       color: white;
       background: var(--green);
       font-weight: 800;
       letter-spacing: -.04em;
     }
     h1 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
-    .subtitle { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
     .badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
     .badge {
       padding: 6px 10px;
-      border: 1px solid #cddad2;
+      border: 1px solid #ced9d3;
       border-radius: 999px;
       color: #315245;
-      background: rgba(255, 255, 255, .7);
+      background: rgba(255, 255, 255, .76);
       font-size: 12px;
       font-weight: 650;
     }
-    .scenario-panel { padding: 20px 0 16px; }
-    .section-title { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 700; }
-    .scenario-list { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; }
-    .scenario-note { font-size: 12px; color: #888; margin: 0 0 8px; }
+    .scenario-panel { padding: 28px 0 22px; }
+    .section-title { margin: 0 0 8px; font-size: 15px; }
+    .scenario-note { max-width: 900px; margin: 0 0 19px; color: var(--muted); font-size: 12px; line-height: 1.65; }
+    .scenario-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; }
+    .scenario-group h3 { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    .scenario-list { display: flex; flex-wrap: wrap; gap: 8px; }
     .scenario {
-      flex: 0 0 auto;
+      min-width: 0;
       padding: 9px 12px;
       border: 1px solid var(--line);
-      border-radius: 10px;
-      color: #32463e;
-      background: rgba(255, 255, 255, .76);
+      border-radius: 9px;
+      color: #30453c;
+      background: rgba(255, 255, 255, .82);
+      font-size: 13px;
+      line-height: 1.45;
+      text-align: left;
     }
-    .scenario:hover { border-color: #91aa9d; background: white; }
-    .workspace { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(340px, .92fr); gap: 18px; }
-    .panel { border: 1px solid var(--line); border-radius: 20px; background: var(--paper); box-shadow: var(--shadow); }
-    .chat-panel { min-height: 660px; display: flex; flex-direction: column; overflow: hidden; }
+    .scenario:hover { border-color: #8da99c; color: var(--green); background: white; }
+    .scenario:focus-visible, .node-chip:focus-visible, button:focus-visible { outline: 3px solid rgba(23, 107, 77, .2); outline-offset: 2px; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1.04fr) minmax(360px, .96fr); gap: 20px; }
+    .panel { border: 1px solid var(--line); border-radius: 18px; background: var(--paper); box-shadow: var(--shadow); }
+    .chat-panel { min-height: 680px; display: flex; flex-direction: column; overflow: hidden; }
     .panel-head {
       display: flex;
-      min-height: 64px;
+      min-height: 68px;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      padding: 14px 18px;
+      gap: 14px;
+      padding: 16px 20px;
       border-bottom: 1px solid var(--line);
     }
     .panel-head h2 { margin: 0; font-size: 15px; }
-    .vehicle-controls { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 11px; background: #edf0ed; }
+    .vehicle-controls { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: 10px; background: #eef1ef; }
     .vehicle-controls button {
       padding: 7px 10px;
       border: 0;
-      border-radius: 8px;
+      border-radius: 7px;
       color: var(--muted);
       background: transparent;
       font-size: 12px;
     }
     .vehicle-controls button.active { color: white; background: var(--green); }
-    .messages { flex: 1; min-height: 360px; padding: 22px 18px; overflow-y: auto; }
-    .empty { max-width: 420px; margin: 100px auto; text-align: center; color: var(--muted); line-height: 1.7; }
-    .message { display: flex; margin-bottom: 16px; }
+    .messages { flex: 1; min-height: 370px; padding: 26px 20px; overflow-y: auto; }
+    .empty { max-width: 420px; margin: 105px auto; text-align: center; color: var(--muted); line-height: 1.75; }
+    .message { display: flex; margin-bottom: 18px; }
     .message.user { justify-content: flex-end; }
-    .bubble { max-width: 82%; padding: 11px 14px; border-radius: 15px; line-height: 1.6; white-space: pre-wrap; }
-    .assistant .bubble { background: #eef3ef; border-bottom-left-radius: 4px; }
+    .bubble { max-width: 82%; padding: 12px 15px; border-radius: 14px; line-height: 1.65; white-space: pre-wrap; }
+    .assistant .bubble { background: #eff3f0; border-bottom-left-radius: 4px; }
     .user .bubble { color: white; background: var(--green); border-bottom-right-radius: 4px; }
     .error .bubble { color: #8e361d; background: #ffebe3; }
-    .confirm-box { display: none; margin: 0 18px 14px; padding: 13px; border: 1px solid #eccd99; border-radius: 12px; background: var(--amber-soft); }
+    .confirm-box { display: none; margin: 0 20px 16px; padding: 14px; border: 1px solid #e9c98f; border-radius: 11px; background: var(--amber-soft); }
     .confirm-box.visible { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .confirm-copy { color: #76501f; font-size: 13px; line-height: 1.45; }
-    .confirm-button { flex: 0 0 auto; padding: 9px 13px; border: 0; border-radius: 9px; color: white; background: var(--amber); }
-    .composer { display: flex; gap: 9px; padding: 14px 18px 18px; border-top: 1px solid var(--line); }
-    .composer input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid #cfd8d2; border-radius: 11px; color: var(--ink); background: white; outline: none; }
+    .confirm-copy { color: #76501f; font-size: 13px; line-height: 1.55; }
+    .confirm-button { flex: 0 0 auto; padding: 9px 13px; border: 0; border-radius: 8px; color: white; background: var(--amber); }
+    .composer { display: flex; gap: 9px; padding: 16px 20px 20px; border-top: 1px solid var(--line); }
+    .composer input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid #cfd8d2; border-radius: 10px; color: var(--ink); background: white; line-height: 1.6; outline: none; }
     .composer input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23, 107, 77, .12); }
-    .send-button { padding: 11px 18px; border: 0; border-radius: 11px; color: white; background: var(--green); font-weight: 700; }
-    .trace-panel { min-height: 660px; padding-bottom: 18px; }
-    .trace-meta { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-    .timeline { padding: 20px 20px 4px 28px; }
-    .trace-empty { margin: 110px 28px; color: var(--muted); text-align: center; line-height: 1.7; }
-    .trace-item { position: relative; padding: 0 0 20px 22px; border-left: 2px solid #d6e2da; }
-    .trace-item:last-child { padding-bottom: 2px; border-left-color: transparent; }
-    .trace-dot { position: absolute; top: 1px; left: -7px; width: 12px; height: 12px; border: 3px solid var(--paper); border-radius: 50%; background: var(--green); box-shadow: 0 0 0 1px var(--green); }
-    .trace-node { margin: 0 0 5px; color: #285341; font: 700 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .trace-summary { margin: 0; color: #52615b; font-size: 13px; line-height: 1.55; }
-    .trace-event { display: inline-block; margin-top: 7px; padding: 3px 7px; border-radius: 6px; color: #50625a; background: var(--green-soft); font-size: 10px; }
-    @media (max-width: 820px) {
+    .send-button { padding: 11px 19px; border: 0; border-radius: 10px; color: white; background: var(--green); font-weight: 700; }
+    .trace-panel { min-height: 680px; overflow: hidden; }
+    .trace-meta { max-width: 190px; overflow: hidden; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .trace-empty { margin: 120px 32px; color: var(--muted); text-align: center; line-height: 1.75; }
+    .trajectory { padding: 22px 22px 24px; }
+    .node-section + .node-section { margin-top: 21px; padding-top: 19px; border-top: 1px solid #e7ebe8; }
+    .node-section-title { margin: 0 0 10px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    .node-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .node-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 10px;
+      border: 1px solid #cbd3ce;
+      border-radius: 999px;
+      color: #78827d;
+      background: white;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+    }
+    .node-chip::before { width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; content: ""; }
+    .node-chip.visited { border-color: var(--green); color: white; background: var(--green); }
+    .node-chip.visited::before { border-color: white; background: white; }
+    .node-chip.blocked { border-color: var(--danger); color: white; background: var(--danger); }
+    .node-chip.selected { box-shadow: 0 0 0 3px rgba(23, 107, 77, .14); }
+    .node-chip.blocked.selected { box-shadow: 0 0 0 3px rgba(165, 75, 42, .14); }
+    .node-detail { margin-top: 22px; padding: 18px; border: 1px solid var(--line); border-radius: 13px; background: #f8faf8; }
+    .node-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+    .node-detail h3 { margin: 0; font-size: 14px; }
+    .node-code { margin-left: 6px; color: var(--muted); font: 500 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .status { padding: 4px 8px; border-radius: 999px; color: var(--muted); background: #e9edeb; font-size: 11px; }
+    .status.visited { color: var(--green); background: var(--green-soft); }
+    .status.blocked { color: var(--danger); background: var(--danger-soft); }
+    .node-summary { margin: 0; padding: 0; list-style: none; }
+    .node-summary li { position: relative; padding-left: 15px; color: #50605a; font-size: 13px; line-height: 1.65; }
+    .node-summary li + li { margin-top: 7px; }
+    .node-summary li::before { position: absolute; top: .73em; left: 0; width: 5px; height: 5px; border-radius: 50%; background: #91a198; content: ""; }
+    @media (max-width: 860px) {
       .brand-row { align-items: flex-start; flex-direction: column; }
       .badges { justify-content: flex-start; }
       .workspace { grid-template-columns: 1fr; }
       .chat-panel, .trace-panel { min-height: auto; }
-      .messages { min-height: 380px; }
+      .messages { min-height: 390px; }
     }
-    @media (max-width: 520px) {
+    @media (max-width: 620px) {
       .shell { width: min(100% - 20px, 1180px); }
-      .panel-head { align-items: flex-start; flex-direction: column; }
+      .topbar { margin: 0 -10px; padding: 16px 10px; }
+      .scenario-groups { grid-template-columns: 1fr; gap: 14px; }
+      .scenario { max-width: 100%; overflow-wrap: anywhere; }
+      .panel-head { align-items: flex-start; flex-direction: column; padding: 16px; }
+      .messages, .trajectory { padding-left: 16px; padding-right: 16px; }
       .bubble { max-width: 92%; }
+      .composer { padding: 14px 16px 16px; }
+      .node-detail-head { align-items: flex-start; flex-direction: column; gap: 8px; }
     }
   </style>
 </head>
@@ -161,23 +202,58 @@
 
     <section class="scenario-panel" aria-labelledby="scenario-title">
       <h2 class="section-title" id="scenario-title">15 个体验场景</h2>
-      <p class="scenario-note">换歌 / 限号 / 知识问答 / 车控四类工具尚未接入：点击后仍走真实链路，页面会如实显示“未执行工具调用”，不伪造结果。</p>
-      <div class="scenario-list" id="scenarios">
-        <button class="scenario" type="button">带我去798</button>
-        <button class="scenario" type="button">去三里屯</button>
-        <button class="scenario" type="button">一会儿去潮白河，天气怎么样</button>
-        <button class="scenario" type="button">今天限号吗，我要去菜市口</button>
-        <button class="scenario" type="button">去亦庄，避开拥堵</button>
-        <button class="scenario" type="button">还有多远</button>
-        <button class="scenario" type="button">去学院路，几点能到</button>
-        <button class="scenario" type="button">去机场</button>
-        <button class="scenario" type="button">下周想开车去乌兰察布，帮我规划一下</button>
-        <button class="scenario" type="button">换首歌</button>
-        <button class="scenario" type="button">798为什么叫798</button>
-        <button class="scenario" type="button">有点热，空调开大点，顺便把天窗打开，音量调小点</button>
-        <button class="scenario" type="button">去三里屯，顺便帮我看看今天限号吗</button>
-        <button class="scenario" type="button">去那个河边</button>
-        <button class="scenario" type="button">去亦庄</button>
+      <p class="scenario-note">媒体 / 车控 / 限号 / 知识问答四类工具尚未接入：点击后仍走真实链路，页面会如实显示“未执行工具调用”，不伪造结果。</p>
+      <div class="scenario-groups" id="scenarios">
+        <section class="scenario-group">
+          <h3>导航</h3>
+          <div class="scenario-list">
+            <button class="scenario" type="button" data-scenario="nav-798">带我去798</button>
+            <button class="scenario" type="button" data-scenario="nav-sanlitun">去三里屯</button>
+            <button class="scenario" type="button" data-scenario="nav-yizhuang-avoid-traffic">去亦庄，避开拥堵</button>
+            <button class="scenario" type="button" data-scenario="nav-distance">还有多远</button>
+            <button class="scenario" type="button" data-scenario="nav-xueyuan-road-eta">去学院路，几点能到</button>
+            <button class="scenario" type="button" data-scenario="nav-airport">去机场</button>
+            <button class="scenario" type="button" data-scenario="nav-ulanchabu-next-week">下周想开车去乌兰察布，帮我规划一下</button>
+          </div>
+        </section>
+        <section class="scenario-group">
+          <h3>天气</h3>
+          <div class="scenario-list">
+            <button class="scenario" type="button" data-scenario="weather-chaobai">一会儿去潮白河，天气怎么样</button>
+          </div>
+        </section>
+        <section class="scenario-group">
+          <h3>限号</h3>
+          <div class="scenario-list">
+            <button class="scenario" type="button" data-scenario="restriction-caishikou">今天限号吗，我要去菜市口</button>
+            <button class="scenario" type="button" data-scenario="restriction-sanlitun">去三里屯，顺便帮我看看今天限号吗</button>
+          </div>
+        </section>
+        <section class="scenario-group">
+          <h3>媒体</h3>
+          <div class="scenario-list">
+            <button class="scenario" type="button" data-scenario="media-next">换首歌</button>
+          </div>
+        </section>
+        <section class="scenario-group">
+          <h3>车控</h3>
+          <div class="scenario-list">
+            <button class="scenario" type="button" data-scenario="vehicle-hvac">有点热，空调开大点，顺便把天窗打开，音量调小点</button>
+          </div>
+        </section>
+        <section class="scenario-group">
+          <h3>知识问答</h3>
+          <div class="scenario-list">
+            <button class="scenario" type="button" data-scenario="knowledge-798">798为什么叫798</button>
+          </div>
+        </section>
+        <section class="scenario-group">
+          <h3>澄清</h3>
+          <div class="scenario-list">
+            <button class="scenario" type="button" data-scenario="clarify-river">去那个河边</button>
+            <button class="scenario" type="button" data-scenario="clarify-yizhuang">去亦庄</button>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -205,11 +281,11 @@
 
       <section class="panel trace-panel" aria-labelledby="trace-title">
         <div class="panel-head">
-          <h2 id="trace-title">Trajectory 时间线</h2>
+          <h2 id="trace-title">Trajectory 节点轨迹</h2>
           <span class="trace-meta" id="trace-meta">等待执行</span>
         </div>
         <div id="timeline">
-          <div class="trace-empty">执行后，这里会按实际经过顺序解释每个节点。未调用工具时也会如实显示。</div>
+          <div class="trace-empty">执行后，这里会区分走过、跳过与被策略拦截的节点。点击节点可查看输入输出摘要。</div>
         </div>
       </section>
     </div>
@@ -220,6 +296,19 @@
     let vehicleState = "parked_simulated";
     let confirmNonce = null;
     let requestInFlight = false;
+    let lastResponse = null;
+    const mainNodes = ["intent", "clarify", "planner", "policy_gate", "tool_executor", "verifier"];
+    const auxiliaryNodes = ["memory_recall", "human_confirm", "memory_capture", "recovery"];
+    const nodeLabels = {
+      intent: "意图识别", memory_recall: "偏好召回", clarify: "信息澄清",
+      planner: "任务规划", policy_gate: "安全策略", human_confirm: "用户确认",
+      tool_executor: "工具执行", verifier: "结果验证", memory_capture: "偏好记录",
+      recovery: "失败恢复",
+    };
+    const query = new URLSearchParams(window.location.search);
+    const apiParameter = query.get("api");
+    // 去掉尾斜杠：防止 `${apiBase}/turn` 拼成双斜杠；?api= 跨域时后端仍需配 CORS，页面只负责把地址拼对。
+    const apiBase = apiParameter ? apiParameter.replace(/\/+$/, "") : "";
     const messages = document.getElementById("messages");
     const question = document.getElementById("question");
     const sendButton = document.getElementById("send-button");
@@ -257,88 +346,158 @@
       confirmBox.classList.add("visible");
     }
 
-    function groupTraceByVisit(nodes, trace) {
-      // visited_nodes 与 trace 是同一次 graph 运行按顺序写入的，天然对齐；
-      // 若某节点没有事件就归空组，不跨节点回填（错位只会在写入逻辑变更时出现）。
-      let cursor = 0;
-      return nodes.map((node) => {
-        while (cursor < trace.length && trace[cursor].node !== node) cursor += 1;
-        const events = [];
-        while (cursor < trace.length && trace[cursor].node === node) {
-          events.push(trace[cursor]);
-          cursor += 1;
-        }
-        return {node, events};
-      });
-    }
-
     function toolNames(steps) {
       return (steps || []).map((step) => step.tool).filter(Boolean);
     }
 
-    function describeEvent(item) {
-      const payload = item.payload || {};
-      if (item.node === "intent") return `识别请求：“${payload.text || "空输入"}”。`;
-      if (item.node === "memory_recall") return `召回 ${payload.count || 0} 条偏好${payload.error ? "，召回失败已留痕" : ""}。`;
-      if (item.node === "clarify") return payload.need_clarify ? "需要补充信息后再继续。" : "信息足够，继续规划。";
-      if (item.node === "planner") {
-        const names = toolNames(payload.steps);
-        return names.length ? `计划调用：${names.join("、")}。` : "规划完成，未生成工具调用。";
-      }
-      if (item.node === "policy_gate") return describePolicy(payload.decisions || []);
-      if (item.node === "human_confirm") return payload.confirmed ? "确认凭证已通过。" : "等待用户确认，尚未执行。";
-      if (item.node === "tool_executor") return describeResults(payload.results || []);
-      if (item.node === "verifier") return payload.task_completed ? "安全检查通过，任务完成。" : `任务未完成：${(payload.failures || []).join("、") || "没有可验证的结果"}。`;
-      if (item.node === "memory_capture") return payload.written?.length ? `写入 ${payload.written.length} 条已确认偏好。` : "没有写入新的偏好。";
-      if (item.node === "recovery") return "工具失败后进行一次确定性恢复。";
-      return `记录事件 ${item.event}。`;
+    function decisionName(decision) {
+      return {allow: "允许", deny: "拦截", confirm: "需确认", degrade: "降级"}[decision] || decision;
     }
 
     function describePolicy(decisions) {
-      if (!decisions.length) return "没有工具调用需要策略判断。";
-      const parts = decisions.map((item) => `${item.decision}（${item.reason_code}）`);
-      return `策略判断：${parts.join("、")}。`;
+      if (!decisions.length) return "输出：没有工具调用需要策略判断。";
+      const parts = decisions.map((item) => {
+        const reason = item.detail || `规则 ${item.reason_code}`;
+        return `${decisionName(item.decision)}：${reason}`;
+      });
+      return `输出：${parts.join("；")}。`;
     }
 
     function describeResults(results) {
-      if (!results.length) return "未执行工具调用。";
-      const parts = results.map((item) => `${item.tool} ${item.ok ? "成功" : "失败"}`);
-      return `执行结果：${parts.join("、")}。`;
+      if (!results.length) return "输出：未执行工具调用。";
+      const parts = results.map((item) => `${item.tool} ${item.ok ? "成功" : `失败（${item.error || "未返回原因"}）`}`);
+      return `输出：${parts.join("；")}。`;
+    }
+
+    function describeVerification(verification) {
+      if (!verification || Object.keys(verification).length === 0) return "输出：没有验证结果。";
+      if (verification.ok && verification.task_completed) return "输出：安全检查通过，任务完成。";
+      const failures = verification.failures || [];
+      if (verification.ok) return `输出：安全检查通过，但任务未完成${failures.length ? `（${failures.join("；")}）` : ""}。`;
+      return `输出：安全检查未通过${failures.length ? `（${failures.join("；")}）` : ""}。`;
+    }
+
+    function describeEvent(item) {
+      const payload = item.payload || {};
+      if (item.node === "intent") return `输入：用户请求“${payload.text || "空输入"}”；输出：已提取为本轮意图。`;
+      if (item.node === "memory_recall") return `输出：召回 ${payload.count || 0} 条偏好${payload.error ? "，召回失败并已留痕" : ""}。`;
+      if (item.node === "clarify") return payload.need_clarify ? "输出：当前信息不足，需要用户补充后继续。" : "输出：信息足够，可以进入任务规划。";
+      if (item.node === "planner") {
+        const names = toolNames(payload.steps);
+        return names.length ? `输出：计划调用 ${names.join("、")}。` : "输出：规划完成，未生成工具调用。";
+      }
+      if (item.node === "policy_gate" && item.event === "degraded_params") return "输出：为满足安全策略，已缩减工具参数。";
+      if (item.node === "policy_gate") return describePolicy(payload.decisions || []);
+      if (item.node === "human_confirm") return payload.confirmed ? "输入：用户确认；输出：确认凭证通过。" : "输出：等待用户确认，尚未执行后续操作。";
+      if (item.node === "tool_executor") return describeResults(payload.results || []);
+      if (item.node === "verifier") return describeVerification(payload);
+      if (item.node === "memory_capture") {
+        if (payload.written?.length) return `输出：写入 ${payload.written.length} 条已确认偏好。`;
+        if (payload.pending) return `输出：有 ${payload.pending} 条偏好等待用户确认。`;
+        return "输出：没有写入新的偏好。";
+      }
+      if (item.node === "recovery") return `输出：进入第 ${payload.recovery_count || 1} 次确定性恢复并准备重试。`;
+      return "该节点已执行，但本次事件没有可展示的摘要。";
+    }
+
+    function summariesForNode(response, node, visited) {
+      if (!visited) return ["本轮未经过该节点，因此没有输入输出事件。"];
+      const summaries = (response.trace || []).filter((item) => item.node === node).map(describeEvent);
+      if (node === "policy_gate" && !summaries.length) summaries.push(describePolicy(response.policy_decisions || []));
+      if (node === "verifier") {
+        const responseSummary = describeVerification(response.verification);
+        if (!summaries.includes(responseSummary)) summaries.push(responseSummary);
+      }
+      return summaries.length ? summaries : ["节点已经过，但本轮 trace 没有记录可展示的事件。"];
+    }
+
+    function nodeStatus(response, node) {
+      // graph 只记录实际经过的节点，visited_nodes 里没出现即为跳过；
+      // 跳过的节点没有事件可展示，详情里如实说明，不补造。
+      const visited = (response.visited_nodes || []).includes(node);
+      const denied = node === "policy_gate" && (response.policy_decisions || []).some((item) => item.decision === "deny");
+      if (denied) return "blocked";
+      return visited ? "visited" : "skipped";
+    }
+
+    function renderNodeDetail(node) {
+      const detail = document.getElementById("node-detail");
+      const status = nodeStatus(lastResponse, node);
+      const statusLabel = {visited: "已走过", skipped: "已跳过", blocked: "已拦截"}[status];
+      detail.replaceChildren();
+      const head = document.createElement("div");
+      head.className = "node-detail-head";
+      const title = document.createElement("h3");
+      title.textContent = nodeLabels[node];
+      const code = document.createElement("span");
+      code.className = "node-code";
+      code.textContent = node;
+      title.appendChild(code);
+      const badge = document.createElement("span");
+      badge.className = `status ${status}`;
+      badge.textContent = statusLabel;
+      head.append(title, badge);
+      const list = document.createElement("ul");
+      list.className = "node-summary";
+      summariesForNode(lastResponse, node, status !== "skipped").forEach((summary) => {
+        const item = document.createElement("li");
+        item.textContent = summary;
+        list.appendChild(item);
+      });
+      detail.append(head, list);
+      document.querySelectorAll(".node-chip").forEach((chip) => {
+        const selected = chip.dataset.node === node;
+        chip.classList.toggle("selected", selected);
+        chip.setAttribute("aria-expanded", String(selected));
+      });
+    }
+
+    function makeNodeChip(response, node) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = `node-chip ${nodeStatus(response, node)}`;
+      chip.dataset.node = node;
+      chip.textContent = nodeLabels[node];
+      chip.title = node;
+      chip.setAttribute("aria-expanded", "false");
+      chip.addEventListener("click", () => renderNodeDetail(node));
+      return chip;
+    }
+
+    function makeNodeSection(response, title, nodes) {
+      const section = document.createElement("section");
+      section.className = "node-section";
+      const heading = document.createElement("h3");
+      heading.className = "node-section-title";
+      heading.textContent = title;
+      const chips = document.createElement("div");
+      chips.className = "node-chips";
+      nodes.forEach((node) => chips.appendChild(makeNodeChip(response, node)));
+      section.append(heading, chips);
+      return section;
     }
 
     function renderTimeline(response) {
+      lastResponse = response;
       const timeline = document.getElementById("timeline");
       timeline.replaceChildren();
-      const list = document.createElement("div");
-      list.className = "timeline";
-      const visits = groupTraceByVisit(response.visited_nodes || [], response.trace || []);
-      visits.forEach((visit) => list.appendChild(makeTraceItem(visit)));
-      timeline.appendChild(list);
+      const trajectory = document.createElement("div");
+      trajectory.className = "trajectory";
+      trajectory.append(
+        makeNodeSection(response, "主链路", mainNodes),
+        makeNodeSection(response, "辅助节点", auxiliaryNodes),
+      );
+      const detail = document.createElement("section");
+      detail.className = "node-detail";
+      detail.id = "node-detail";
+      detail.setAttribute("aria-live", "polite");
+      trajectory.appendChild(detail);
+      timeline.appendChild(trajectory);
       document.getElementById("trace-meta").textContent = response.trace_id;
-    }
-
-    function makeTraceItem(visit) {
-      const item = document.createElement("div");
-      item.className = "trace-item";
-      const dot = document.createElement("span");
-      dot.className = "trace-dot";
-      const name = document.createElement("h3");
-      name.className = "trace-node";
-      name.textContent = visit.node;
-      item.append(dot, name);
-      const events = visit.events.length ? visit.events : [{node: visit.node, event: "visited", payload: {}}];
-      events.forEach((event) => appendEvent(item, event));
-      return item;
-    }
-
-    function appendEvent(parent, event) {
-      const summary = document.createElement("p");
-      summary.className = "trace-summary";
-      summary.textContent = describeEvent(event);
-      const eventName = document.createElement("span");
-      eventName.className = "trace-event";
-      eventName.textContent = event.event;
-      parent.append(summary, eventName);
+      const firstNode = nodeStatus(response, "policy_gate") === "blocked"
+        ? "policy_gate"
+        : (response.visited_nodes || [])[0] || "intent";
+      renderNodeDetail(firstNode);
     }
 
     async function sendTurn(text, extra = {}, displayText = text) {
@@ -346,19 +505,19 @@
       if (displayText) addMessage("user", displayText);
       setBusy(true);
       try {
-        const response = await fetch("/turn", {
+        const response = await fetch(`${apiBase}/turn`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({session_id: sessionId, text, vehicle_state: vehicleState, ...extra}),
         });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.detail || "请求失败");
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.detail || `后端返回 ${response.status}`);
         sessionId = body.session_id;
         addMessage("assistant", body.final_response || "本轮没有返回回答。");
         renderTimeline(body);
         showConfirmation(body);
       } catch (error) {
-        addMessage("assistant", `请求失败：${error.message}`, true);
+        addMessage("assistant", `请求失败：${error.message}。请检查后端是否可访问，以及 URL 中的 api 参数是否正确。`, true);
       } finally {
         setBusy(false);
         question.focus();
@@ -372,12 +531,10 @@
       question.value = "";
       sendTurn(text);
     });
-
     document.getElementById("scenarios").addEventListener("click", (event) => {
-      const button = event.target.closest("button");
+      const button = event.target.closest("button[data-scenario]");
       if (button) sendTurn(button.textContent.trim());
     });
-
     document.querySelector(".vehicle-controls").addEventListener("click", (event) => {
       const button = event.target.closest("button[data-vehicle]");
       if (!button) return;
@@ -385,12 +542,18 @@
       document.querySelectorAll("button[data-vehicle]").forEach((item) => item.classList.remove("active"));
       button.classList.add("active");
     });
-
     document.getElementById("confirm-button").addEventListener("click", () => {
       if (!confirmNonce) return;
       confirmBox.classList.remove("visible");
       sendTurn("", {confirm: true, confirm_nonce: confirmNonce}, "确认");
     });
+
+    const linkedScenario = query.get("scenario");
+    if (linkedScenario) {
+      const button = Array.from(document.querySelectorAll("button[data-scenario]"))
+        .find((item) => item.dataset.scenario === linkedScenario);
+      if (button) sendTurn(button.textContent.trim());
+    }
   </script>
 </body>
 </html>
