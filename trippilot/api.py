@@ -226,7 +226,7 @@ def turn(req: TurnRequest) -> TurnResponse:
         policy_decisions=[d.model_dump() for d in out.policy_decisions],
         verification=out.verification_result,
         pending_memory_confirms=pending_memory,
-        trace=[event.model_dump() for event in getattr(out, "trace", [])])
+        trace=[event.model_dump() for event in getattr(out, "trace", None) or []])
     log.info("turn response: %s", _redact(
         resp.model_dump(exclude={"trace"})))
     return resp

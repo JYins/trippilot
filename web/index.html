@@ -67,6 +67,7 @@
     .scenario-panel { padding: 20px 0 16px; }
     .section-title { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 700; }
     .scenario-list { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; }
+    .scenario-note { font-size: 12px; color: #888; margin: 0 0 8px; }
     .scenario {
       flex: 0 0 auto;
       padding: 9px 12px;
@@ -160,6 +161,7 @@
 
     <section class="scenario-panel" aria-labelledby="scenario-title">
       <h2 class="section-title" id="scenario-title">15 个体验场景</h2>
+      <p class="scenario-note">换歌 / 限号 / 知识问答 / 车控四类工具尚未接入：点击后仍走真实链路，页面会如实显示“未执行工具调用”，不伪造结果。</p>
       <div class="scenario-list" id="scenarios">
         <button class="scenario" type="button">带我去798</button>
         <button class="scenario" type="button">去三里屯</button>
@@ -256,6 +258,8 @@
     }
 
     function groupTraceByVisit(nodes, trace) {
+      // visited_nodes 与 trace 是同一次 graph 运行按顺序写入的，天然对齐；
+      // 若某节点没有事件就归空组，不跨节点回填（错位只会在写入逻辑变更时出现）。
       let cursor = 0;
       return nodes.map((node) => {
         while (cursor < trace.length && trace[cursor].node !== node) cursor += 1;
