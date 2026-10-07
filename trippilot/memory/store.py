@@ -53,7 +53,7 @@ def hash_embedder(dim: int = 64) -> EmbedFn:
 
     中文短文本按字二元切分做哈希词袋，口语化短文本
     （"送我去公司" vs "公司地址：望京 SOHO"）能共享字二元。
-    生产召回质量以 FastEmbed 为准，不拿这个充数。
+    生产召回质量以 BGE 为准，不拿这个充数。
     """
 
     def embed(texts: list[str]) -> list[list[float]]:
@@ -72,14 +72,22 @@ def hash_embedder(dim: int = 64) -> EmbedFn:
     return embed
 
 
-def _fastembed_default() -> EmbedFn:
-    # 延迟导入：没装 fastembed 也能 import 本模块，第一次真正向量化时才报错
-    from fastembed import TextEmbedding
+# bge-small-en-v1.5 的旧库是 384 维，新模型是 512 维，两者不兼容；单用户
+# 本地原型直接删库重建，不为这批本地数据增加自动迁移逻辑。
+def _bge_default() -> EmbedFn:
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "缺少 sentence-transformers，无法加载默认 BGE 模型；"
+            "请运行 `pip install sentence-transformers>=3.0` 安装。"
+        ) from exc
 
-    model = TextEmbedding()
+    model = SentenceTransformer("BAAI/bge-small-zh-v1.5")
 
     def embed(texts: list[str]) -> list[list[float]]:
-        return [list(v) for v in model.embed(texts)]
+        vectors = model.encode(texts, normalize_embeddings=True)
+        return [list(vector) for vector in vectors]
 
     return embed
 
@@ -98,8 +106,8 @@ class PreferenceStore:
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
         if self._embed_fn is None:
-            # 生产默认：第一次向量化时才加载模型（慢，且要下载）
-            self._embed_fn = _fastembed_default()
+            # 生产默认 BGE 首次加载较慢且可能下载，避免未使用记忆时承担开销。
+            self._embed_fn = _bge_default()
         return self._embed_fn(texts)
 
     def _ready(self, dim: int | None = None) -> bool:

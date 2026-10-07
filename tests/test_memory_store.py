@@ -1,14 +1,38 @@
 """PreferenceStore 测试：全链路 + fixture 召回@k，全部离线 fake 向量。"""
 
 import json
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 from trippilot.memory.store import (MemoryRejected, PreferenceStore,
-                                    hash_embedder)
+                                    _bge_default, hash_embedder)
 
 UID = "u_test"
+
+
+def test_bge_default_wiring(monkeypatch):
+    calls = {}
+    fake_module = ModuleType("sentence_transformers")
+
+    class StubSentenceTransformer:
+        def __init__(self, model_name):
+            calls["model_name"] = model_name
+
+        def encode(self, texts, **kwargs):
+            calls["texts"] = texts
+            calls["encode_kwargs"] = kwargs
+            return [[0.1, 0.2] for _ in texts]
+
+    fake_module.SentenceTransformer = StubSentenceTransformer
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    embed = _bge_default()
+    assert embed(["送我去公司"]) == [[0.1, 0.2]]
+    assert calls["model_name"] == "BAAI/bge-small-zh-v1.5"
+    assert calls["encode_kwargs"]["normalize_embeddings"] is True
 
 
 @pytest.fixture()
