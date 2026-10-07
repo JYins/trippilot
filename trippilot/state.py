@@ -75,12 +75,16 @@ class TripPilotState(BaseModel):
     tool_calls: list[ToolCall] = Field(default_factory=list)
     policy_decisions: list[PolicyDecision] = Field(default_factory=list)
     confirmation_state: Literal["not_required", "pending", "confirmed", "rejected"] = "not_required"
+    # 工具类确认已授予，只覆盖工具调用，不覆盖记忆写入
+    tool_call_confirmed: bool = False
     tool_results: list[ToolResult] = Field(default_factory=list)
     verification_result: dict[str, Any] = Field(default_factory=dict)
     recovery_count: int = 0
     memory_candidates: list[dict[str, Any]] = Field(default_factory=list)
     # memory_capture 挂起的敏感偏好：走现有 human_confirm 流程，确认后才写
     pending_memory_confirms: list[dict[str, Any]] = Field(default_factory=list)
+    # 已授予的记忆写入确认 ID；memory_confirm_id 粒度，只对当时挂起的候选有效
+    confirmed_memory_ids: list[str] = Field(default_factory=list)
     # memory_recall 召回的偏好（Preference.model_dump()），供 planner/回答参考
     preferences: list[dict[str, Any]] = Field(default_factory=list)
     final_response: str = ""

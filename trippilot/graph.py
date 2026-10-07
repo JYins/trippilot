@@ -35,8 +35,8 @@ def _route_after_policy(state: TripPilotState) -> str:
 
 
 def _route_after_capture(state: TripPilotState) -> str:
-    if (state.pending_memory_confirms
-            and state.confirmation_state != "confirmed"):
+    # pending 只保留未获授权的候选，已授权候选会在 capture 时写掉，不会死循环。
+    if state.pending_memory_confirms:
         return "confirm"
     verification = state.verification_result or {}
     has_failed_tool = any(not result.ok for result in state.tool_results)

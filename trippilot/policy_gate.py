@@ -25,6 +25,7 @@ TOOL_POLICIES = {
 
 # ASR 置信度阈值：地点/时间实体低于此值时，禁止产生副作用的调用
 LOW_CONFIDENCE_THRESHOLD = 0.6
+MEMORY_CONFIRM_REASON = "sensitive_memory_needs_confirm"
 
 
 def evaluate(
@@ -174,7 +175,7 @@ def evaluate_memory_candidate(candidate: dict[str, Any]) -> PolicyDecision:
     content = str(candidate.get("content") or "")
     if (candidate.get("sensitivity") == "sensitive"
             or classify_pii(content)):
-        return PolicyDecision(decision="confirm", reason_code="sensitive_memory_needs_confirm",
+        return PolicyDecision(decision="confirm", reason_code=MEMORY_CONFIRM_REASON,
                               detail="敏感或疑似 PII 写入前单独确认，并允许删除")
     return PolicyDecision(decision="allow", reason_code="stable_preference_write",
                           detail="稳定偏好写入长期记忆")
@@ -182,5 +183,6 @@ def evaluate_memory_candidate(candidate: dict[str, Any]) -> PolicyDecision:
 
 __all__ = [
     "evaluate", "check_tool_call", "scan_tool_text", "evaluate_memory_candidate",
-    "PolicyDecision", "LOW_CONFIDENCE_THRESHOLD", "TOOL_POLICIES",
+    "PolicyDecision", "LOW_CONFIDENCE_THRESHOLD", "MEMORY_CONFIRM_REASON",
+    "TOOL_POLICIES",
 ]

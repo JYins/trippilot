@@ -9,8 +9,8 @@ from typing import Any, Callable
 from .llm import LLMClient
 from .memory.extract import extract_candidates
 from .memory.store import MemoryRejected, PreferenceStore
-from .policy_gate import (LOW_CONFIDENCE_THRESHOLD, check_tool_call,
-                          scan_tool_text)
+from .policy_gate import (LOW_CONFIDENCE_THRESHOLD, MEMORY_CONFIRM_REASON,
+                          check_tool_call, scan_tool_text)
 from .state import (ASRResult, PlanStep, PolicyDecision, ToolCall, ToolResult,
                     TraceEvent, TripPilotState)
 from .tools import ToolError, fixture_key_for, get_tool
@@ -231,14 +231,21 @@ def human_confirm_node(state: TripPilotState) -> dict[str, Any]:
     if confirmed:
         confirmed_ids = [memory_confirm_id(item)
                          for item in state.pending_memory_confirms]
+    tool_confirmed = bool(confirmed and state.pending_tool_calls)
     update = _trace(
         state,
         "human_confirm",
         "confirmed" if confirmed else "awaiting_user",
-        {"confirmed": confirmed, "confirmed_ids": confirmed_ids},
+        {"confirmed": confirmed, "confirmed_ids": confirmed_ids,
+         "tool_confirmed": tool_confirmed},
     )
     if confirmed:
         update["confirmation_state"] = "confirmed"
+        update["confirmed_memory_ids"] = [
+            *state.confirmed_memory_ids, *confirmed_ids,
+        ]
+        if tool_confirmed:
+            update["tool_call_confirmed"] = True
         return update
 
     update["confirmation_state"] = "pending"
@@ -306,9 +313,12 @@ def _verification_failures(state: TripPilotState) -> tuple[list[str],
         if not result.ok and not criteria.get("allow_tool_failure"):
             task_failures.append(
                 f"tool_failed:{result.tool}:{result.error}")
-    needs_confirmation = any(item.decision == "confirm"
-                             for item in state.policy_decisions)
-    if needs_confirmation and state.confirmation_state != "confirmed":
+    needs_confirmation = any(
+        item.decision == "confirm"
+        and item.reason_code != MEMORY_CONFIRM_REASON
+        for item in state.policy_decisions
+    )
+    if needs_confirmation and not state.tool_call_confirmed:
         safety_failures.append("confirmation_missing")
         task_failures.append("confirmation_missing")
     return safety_failures, task_failures, denied
@@ -389,7 +399,7 @@ def _mark_pending(pending: list[dict[str, Any]],
     pending.append(candidate)
     decisions.append(PolicyDecision(
         decision="confirm",
-        reason_code="sensitive_memory_needs_confirm",
+        reason_code=MEMORY_CONFIRM_REASON,
         detail=f"记住这条偏好吗？「{candidate['content']}」（可随时删除）",
     ))
 
@@ -421,17 +431,19 @@ def _write_memory_candidates(
     rejected: list[str] = []
     pending: list[dict[str, Any]] = []
     decisions = list(state.policy_decisions)
-    confirmed = state.confirmation_state == "confirmed"
+    granted = set(state.confirmed_memory_ids)
 
-    if confirmed:
-        for candidate in state.pending_memory_confirms:
+    for candidate in state.pending_memory_confirms:
+        confirm_id = memory_confirm_id(candidate)
+        if confirm_id in granted:
             written.append(_insert_candidate(store, user_id, candidate))
-            written_confirm_ids.append(memory_confirm_id(candidate))
-    else:
-        for candidate in state.pending_memory_confirms:
+            written_confirm_ids.append(confirm_id)
+        else:
             _mark_pending(pending, decisions, candidate)
 
     for candidate in candidates:
+        confirm_id = memory_confirm_id(candidate)
+        confirmed = confirm_id in granted
         try:
             status, memory_id = _capture_candidate(
                 store, user_id, candidate, confirmed)
@@ -441,7 +453,7 @@ def _write_memory_candidates(
         if status == "written":
             written.append(memory_id or "")
             if confirmed:
-                written_confirm_ids.append(memory_confirm_id(candidate))
+                written_confirm_ids.append(confirm_id)
         else:
             _mark_pending(pending, decisions, candidate)
     return written, written_confirm_ids, rejected, pending, decisions
