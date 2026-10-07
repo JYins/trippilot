@@ -69,6 +69,38 @@ class DeterministicStub(LLMClient):
                                    "time": context.get("reminder_time", ""),
                                    "session_id": context.get("session_id", "")},
                           "description": "创建提醒"})
+        if any(k in text for k in ("限号", "限行")):
+            steps.append({"step_id": f"s{len(steps) + 1}",
+                          "tool": "restriction.query",
+                          "args": {"city": "北京",
+                                   "fixture": context.get(
+                                       "restriction_fixture", "default")},
+                          "description": "查询限行"})
+        if any(k in text for k in ("换歌", "换首歌", "切歌", "下一首")):
+            steps.append({"step_id": f"s{len(steps) + 1}",
+                          "tool": "media.next", "args": {},
+                          "description": "切下一首"})
+        if any(k in text for k in ("音量", "声音")):
+            quieter = any(k in text for k in ("小", "低", "轻", "降", "调小"))
+            action = "decrease" if quieter else "increase"
+            steps.append({"step_id": f"s{len(steps) + 1}",
+                          "tool": "media.volume", "args": {"action": action},
+                          "description": "调音量"})
+        if "空调" in text:
+            quieter = any(k in text for k in ("小", "低", "调小", "关小"))
+            action = "decrease_ac" if quieter else "increase_ac"
+            steps.append({"step_id": f"s{len(steps) + 1}",
+                          "tool": "vehicle.climate", "args": {"action": action},
+                          "description": "调空调"})
+        if "天窗" in text:
+            action = "close" if "关" in text else "open"
+            steps.append({"step_id": f"s{len(steps) + 1}",
+                          "tool": "vehicle.sunroof", "args": {"action": action},
+                          "description": "控制天窗"})
+        if "为什么" in text:
+            steps.append({"step_id": f"s{len(steps) + 1}",
+                          "tool": "knowledge.qa", "args": {"question": text},
+                          "description": "知识问答"})
         return steps
 
     def final_answer(self, *, state_summary: dict[str, Any]) -> str:

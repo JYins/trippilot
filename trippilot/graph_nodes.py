@@ -150,7 +150,9 @@ def planner_node(state: TripPilotState, llm: LLMClient) -> dict[str, Any]:
                  **state.trip_context,
                  "preferences": preferences},
         available_tools=["map.route", "weather.now", "reminder.create",
-                         "trip_log.append"],
+                         "trip_log.append", "restriction.query", "media.next",
+                         "media.volume", "vehicle.climate", "vehicle.sunroof",
+                         "knowledge.qa"],
     )
     plan = [
         PlanStep(
