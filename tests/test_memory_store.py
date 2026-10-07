@@ -197,3 +197,85 @@ def test_semantic_only_case_uses_kind_filter(store):
     assert hits, "kind filter 下应有候选"
     assert all(h.kind == "other" for h in hits)
     assert not any(h.content == "喜欢安静的咖啡馆办公" for h in hits)
+
+
+def test_collection_hnsw_config(store):
+    store.remember(UID, "偏好地铁出行", kind="other")
+
+    info = store._client.get_collection("preferences")
+
+    assert info.config.hnsw_config.m == 16
+    assert info.config.hnsw_config.ef_construct == 100
+
+
+def test_collection_payload_indexes(tmp_path, monkeypatch):
+    s = PreferenceStore(tmp_path / "qdrant", embed_fn=hash_embedder())
+    created_indexes = {}
+    create_payload_index = s._client.create_payload_index
+
+    def record_payload_index(collection_name, field_name, field_schema):
+        created_indexes[field_name] = field_schema
+        return create_payload_index(
+            collection_name, field_name=field_name,
+            field_schema=field_schema)
+
+    monkeypatch.setattr(s._client, "create_payload_index", record_payload_index)
+    try:
+        s.remember(UID, "偏好地铁出行", kind="other")
+        info = s._client.get_collection("preferences")
+
+        # 当前 Qdrant Local 固定返回空 payload_schema，只能从实际建索引调用验收；
+        # server 模式会在 collection info 里返回同一组字段。
+        if info.payload_schema:
+            assert set(info.payload_schema) == {
+                "user_id", "kind", "sensitivity", "created_at",
+            }
+        assert created_indexes == {
+            "user_id": "keyword",
+            "kind": "keyword",
+            "sensitivity": "keyword",
+            "created_at": "datetime",
+        }
+    finally:
+        s.close()
+
+
+def test_dim_mismatch_raises(tmp_path):
+    path = tmp_path / "qdrant"
+    first = PreferenceStore(path, embed_fn=hash_embedder(dim=64))
+    first.remember(UID, "偏好地铁出行", kind="other")
+    first.close()
+
+    second = PreferenceStore(path, embed_fn=hash_embedder(dim=128))
+    try:
+        with pytest.raises(ValueError, match="rebuild|重建") as exc_info:
+            second.remember(UID, "偏好骑车出行", kind="other")
+        message = str(exc_info.value)
+        assert "preferences" in message
+        assert "64" in message
+        assert "128" in message
+    finally:
+        second.close()
+
+
+def test_rebuild_collection(tmp_path):
+    path = tmp_path / "qdrant"
+    first = PreferenceStore(path, embed_fn=hash_embedder(dim=64))
+    first.remember(UID, "偏好地铁出行", kind="other")
+    first.close()
+
+    second = PreferenceStore(path, embed_fn=hash_embedder(dim=128))
+    try:
+        with pytest.raises(ValueError):
+            second.remember(UID, "偏好骑车出行", kind="other")
+
+        second.rebuild_collection()
+        status, memory_id = second.remember(
+            UID, "偏好骑车出行", kind="other")
+        hits = second.recall(UID, "骑车出行")
+
+        assert status == "written"
+        assert memory_id is not None
+        assert hits and hits[0].id == memory_id
+    finally:
+        second.close()

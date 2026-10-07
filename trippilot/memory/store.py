@@ -17,7 +17,8 @@ from typing import Callable, Literal
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import (Distance, FieldCondition, Filter, MatchValue,
-                                  PayloadSchemaType, PointStruct, VectorParams)
+                                  HnswConfigDiff, PayloadSchemaType,
+                                  PointStruct, VectorParams)
 
 from ..policy_gate import evaluate_memory_candidate
 
@@ -27,6 +28,9 @@ Sensitivity = Literal["normal", "sensitive"]
 
 COLLECTION = "preferences"
 DEFAULT_PATH = Path.home() / ".trippilot" / "memory"
+# bge-small-zh-v1.5 输出 512 维；旧 384 维 collection 已不兼容，
+# 见 docs/decisions/20261008-embedding-bge.md。
+EXPECTED_DIM = 512
 
 
 class Preference(BaseModel):
@@ -112,22 +116,64 @@ class PreferenceStore:
 
     def _ready(self, dim: int | None = None) -> bool:
         """collection 可用返回 True；不存在且不知道向量维度时返回 False。"""
-        if not self._client.collection_exists(COLLECTION):
-            if dim is None:  # 还没写过任何东西，没什么可查的
-                return False
-            self._client.create_collection(
-                COLLECTION,
-                vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
-            )
-            # 本地模式下 payload 索引不起作用（但 filter 照常工作）；
-            # 建索引是为将来切 server 模式留的，这个 warning 是预期内的
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", message=".*Payload indexes have no effect.*")
-                self._client.create_payload_index(
-                    COLLECTION, field_name="user_id",
-                    field_schema=PayloadSchemaType.KEYWORD)
+        if self._client.collection_exists(COLLECTION):
+            if dim is not None:
+                self._check_dim(dim)
+            return True
+        if dim is None:  # 还没写过任何东西，没什么可查的
+            return False
+        self._create_collection(dim)
         return True
+
+    def _check_dim(self, expected_dim: int) -> None:
+        collection = self._client.get_collection(COLLECTION)
+        existing_dim = collection.config.params.vectors.size
+        if existing_dim == expected_dim:
+            return
+        raise ValueError(
+            f"collection {COLLECTION!r} 的现有向量维度是 {existing_dim}，"
+            f"期望维度是 {expected_dim}。请调用 rebuild_collection() 或删除本地库"
+            "后重建；单用户原型不做自动迁移。"
+        )
+
+    def _create_collection(self, dim: int) -> None:
+        # 当前几百到几千条远低于 full_scan_threshold 默认值 10000，Qdrant 会精确
+        # 全扫描，HNSW 尚不起作用；m=32 只在百万级才有可测召回收益，却多一倍图边
+        # 内存。m=16 和 ef_construct=100 沿用默认，单条聊天写入也测不出构建质量差异。
+        # 显式固定是为了超过一万条后，生效参数仍是 deliberate 的选择，而非偶然继承。
+        self._client.create_collection(
+            COLLECTION,
+            vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
+            hnsw_config=HnswConfigDiff(m=16, ef_construct=100),
+        )
+        self._create_payload_indexes()
+
+    def _create_payload_indexes(self) -> None:
+        # 本地模式不使用索引，但服务端模式每次 recall 都按 user_id 过滤，kind 也可选。
+        # sensitivity 服务审计/管理查询“列出敏感记忆”，created_at 服务过期范围删除。
+        # source_type 几乎不被过滤；content 走向量召回，hybrid lexical search 另作决策。
+        fields = (
+            ("user_id", PayloadSchemaType.KEYWORD),
+            ("kind", PayloadSchemaType.KEYWORD),
+            ("sensitivity", PayloadSchemaType.KEYWORD),
+            ("created_at", PayloadSchemaType.DATETIME),
+        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=".*Payload indexes have no effect.*")
+            for field_name, field_schema in fields:
+                self._client.create_payload_index(
+                    COLLECTION, field_name=field_name,
+                    field_schema=field_schema)
+
+    def rebuild_collection(self) -> None:
+        """清空并重建；只在开发或更换 embedding 模型时手动调用。"""
+        dim = EXPECTED_DIM
+        if self._embed_fn is not None:
+            dim = len(self._embed(["维度探测"])[0])
+        if self._client.collection_exists(COLLECTION):
+            self._client.delete_collection(COLLECTION)
+        self._create_collection(dim)
 
     @staticmethod
     def _to_preference(point_id: object, payload: dict) -> "Preference":
@@ -179,6 +225,7 @@ class PreferenceStore:
         if not self._ready():
             return []
         vec = self._embed([query])[0]
+        self._ready(len(vec))
         must = [FieldCondition(key="user_id", match=MatchValue(value=user_id))]
         if kind is not None:
             must.append(FieldCondition(key="kind",
