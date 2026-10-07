@@ -1,0 +1,1 @@
+{"expect":{"area":"朝阳区"},"advice":"早晚温差大，建议带外套","area":"朝阳区","fixture":"weather_chaoyang","note":"录制响应：版本化测试 fixture，不代表实时天气","now":{"aqi":62,"temp_c":19,"weather":"多云","wind":"北风3级"},"source":"recorded"}

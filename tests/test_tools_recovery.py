@@ -2,7 +2,6 @@ from copy import deepcopy
 
 import pytest
 
-import trippilot.graph as graph_module
 from trippilot.graph import build_graph, new_state, run_graph
 from trippilot.llm import ScriptedLLM
 from trippilot.state import ToolCall, ToolResult
@@ -42,7 +41,7 @@ def test_reminder_ids_are_not_reused_and_deleted_content_can_be_recreated():
     assert set(ReminderTool._store) == {"rmd_0002", "rmd_0003", "rmd_0004"}
 
 
-def test_recovery_retries_reminder_with_all_original_args(monkeypatch):
+def test_recovery_retries_reminder_with_all_original_args():
     reminder = ReminderTool()
     seen_calls: list[ToolCall] = []
 
@@ -56,7 +55,10 @@ def test_recovery_retries_reminder_with_all_original_args(monkeypatch):
             return result
 
     flaky_tool = TimeoutAfterCreate()
-    monkeypatch.setattr(graph_module, "get_tool", lambda _: flaky_tool)
+
+    def tool_lookup(_tool_name: str):
+        return flaky_tool
+
     original_args = {
         "content": "带伞",
         "time": "2026-10-07T08:00:00+08:00",
@@ -77,7 +79,7 @@ def test_recovery_retries_reminder_with_all_original_args(monkeypatch):
                          "role": "owner"},
     )
 
-    out = run_graph(build_graph(llm), state)
+    out = run_graph(build_graph(llm, tool_lookup=tool_lookup), state)
 
     assert [call.args for call in seen_calls] == [original_args, original_args]
     assert len(ReminderTool._store) == 1

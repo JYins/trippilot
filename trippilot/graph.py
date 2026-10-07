@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from functools import partial
-from typing import Any
+from typing import Any, Callable
 
 from langgraph.graph import END, StateGraph
 
@@ -47,7 +47,8 @@ def _route_after_capture(state: TripPilotState) -> str:
 
 
 def build_graph(llm: LLMClient | None = None,
-                memory_store: PreferenceStore | None = None) -> Any:
+                memory_store: PreferenceStore | None = None,
+                tool_lookup: Callable[[str], Any] = get_tool) -> Any:
     llm = llm or DeterministicStub()
     graph = StateGraph(TripPilotState)
 
@@ -59,7 +60,7 @@ def build_graph(llm: LLMClient | None = None,
     graph.add_node("policy_gate", policy_gate_node)
     graph.add_node("human_confirm", human_confirm_node)
     graph.add_node("tool_executor", partial(
-        tool_executor_node, tool_lookup=get_tool))
+        tool_executor_node, tool_lookup=tool_lookup))
     graph.add_node("verifier", partial(verifier_node, llm=llm))
     graph.add_node("memory_capture", partial(
         memory_capture_node, memory_store=memory_store))

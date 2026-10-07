@@ -158,7 +158,8 @@ class DeepSeekJudge:
             "绕路、重复调同一个工具、做了和用户意图无关的事。\n"
             f"2. {DIM_CLARIFY_QUALITY}（澄清质量）：当轨迹里出现澄清时，"
             "追问是否点名了歧义选项、是否简短口语；没有歧义则给满分。\n"
-            "只输出 JSON：{\"plan_efficiency\": 分数, \"clarify_quality\": 分数,"
+            "只输出 json 对象（JSON）：{\"plan_efficiency\": 分数, "
+            "\"clarify_quality\": 分数,"
             " \"notes\": \"一句话中文点评\"}。不要输出其他内容。"
         )
         asr = case.get("asr") or {}

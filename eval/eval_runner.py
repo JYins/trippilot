@@ -28,6 +28,7 @@ from trippilot.graph import build_graph, memory_confirm_id, new_state, run_graph
 from trippilot.llm import DeterministicStub, ScriptedLLM
 from trippilot.memory.store import PreferenceStore, hash_embedder
 from trippilot.state import ASRResult
+from trippilot.tools import get_tool
 from trippilot.tools.tools import ReminderTool, TripLogTool
 from eval.judge import (
     DIM_CLARIFY_QUALITY,
@@ -224,6 +225,27 @@ def _preferences_written(out, _store, expected) -> bool:
     return len(_written_ids(out.trace)) == expected
 
 
+def _clarify_before_side_effect(out, _store, _case) -> bool:
+    clarify_index = next(
+        (index for index, event in enumerate(out.trace)
+         if event.node == "clarify" and event.event == "clarify_checked"),
+        None,
+    )
+    reminder_index = next(
+        (index for index, event in enumerate(out.trace)
+         if event.node == "tool_executor"
+         and any(result.get("tool") == "reminder.create"
+                 for result in event.payload.get("results", []))),
+        None,
+    )
+    return (clarify_index is not None and reminder_index is not None
+            and clarify_index < reminder_index)
+
+
+def _destination_bound(out, _store, expected) -> bool:
+    return out.trip_context.get("destination") == expected
+
+
 CriterionCheck = Callable[[Any, PreferenceStore, Any], bool]
 CRITERION_CHECKS: dict[str, CriterionCheck] = {
     "reminder_created": _reminder_created,
@@ -236,7 +258,43 @@ CRITERION_CHECKS: dict[str, CriterionCheck] = {
     "recovered_with_matching_fixture": _recovered_with_matching_fixture,
     "final_verification_ok": _final_verification_ok,
     "preferences_written": _preferences_written,
+    "clarify_before_side_effect": _clarify_before_side_effect,
+    "destination_bound": _destination_bound,
 }
+
+
+class _TimeoutAfterCreate:
+    def __init__(self, reminder: ReminderTool, error: str) -> None:
+        self.reminder = reminder
+        self.error = error
+        self.calls = 0
+
+    def run(self, call):
+        self.calls += 1
+        result = self.reminder.run(call)
+        if self.calls == 1:
+            return type(result)(tool=call.tool, ok=False, source=result.source,
+                                error=self.error)
+        return result
+
+
+def _eval_tool_lookup(case: dict) -> Callable[[str], Any]:
+    fault = case.get("tool_fault")
+    if not fault:
+        return get_tool
+    if fault.get("tool") != "reminder.create":
+        raise ValueError(f"unsupported eval tool fault: {fault!r}")
+    if not fault.get("run_tool_first"):
+        raise ValueError("reminder fault must run the tool before returning error")
+    wrapper = _TimeoutAfterCreate(
+        ReminderTool(), fault.get("first_call_error", "injected error"))
+
+    def lookup(tool_name: str):
+        if tool_name == fault["tool"]:
+            return wrapper
+        return get_tool(tool_name)
+
+    return lookup
 
 
 def _check_success_criteria(criteria, out, mem_store, case) -> list[str]:
@@ -262,7 +320,8 @@ def _run_case_with_store(case: dict, mem_store: PreferenceStore,
     TripLogTool.reset()
     llm = (ScriptedLLM(case["scripted_plan"]) if "scripted_plan" in case
            else DeterministicStub())
-    graph = build_graph(llm, memory_store=mem_store)
+    graph = build_graph(llm, memory_store=mem_store,
+                        tool_lookup=_eval_tool_lookup(case))
 
     asr_cfg = case.get("asr")
     asr = ASRResult(text=asr_cfg["text"], confidence=asr_cfg["confidence"],
@@ -332,6 +391,7 @@ def _run_case_with_store(case: dict, mem_store: PreferenceStore,
 
     result = {
         "case_id": case["case_id"],
+        "trace_id": out.trace_id,
         "passed": passed,
         "node_coverage": round(node_coverage, 3),
         "nodes_ok": node_trace["nodes_ok"],
@@ -398,6 +458,14 @@ def main() -> int:
 
     results = [run_case(c, judge=judge) for c in cases]
 
+    trace_ids = [result["trace_id"] for result in results]
+    unique_trace_ids = len(trace_ids) == len(set(trace_ids))
+    judge_failed = bool(judge) and any(
+        "error" in result.get("judge", {}) for result in results)
+    judge_ok_count = sum(1 for result in results
+                         if result.get("judge")
+                         and "dimensions" in result["judge"])
+
     passed = sum(1 for r in results if r["passed"])
     print("=" * 64)
     print("TripPilot eval report  ·  v0.1  ·  数据集: dataset_v0 "
@@ -405,6 +473,7 @@ def main() -> int:
     print(judge_line)
     print("=" * 64)
     print(f"通过: {passed}/{len(cases)}")
+    print(f"trace_id 唯一: {'是' if unique_trace_ids else '否'}")
     for r in results:
         mark = "PASS" if r["passed"] else "FAIL"
         line = (f"[{mark}] {r['case_id']}  "
@@ -436,9 +505,12 @@ def main() -> int:
     if judge is None:
         print("      judge 分数 pending：需 deepseek skill（推荐）"
               "或 TRIPPILOT_JUDGE_API_KEY。")
+    elif judge_failed:
+        print(f"      judge 分数 {judge_ok_count}/{len(cases)}（部分调用失败）；"
+              "规则检查结果不受影响。")
     else:
         print("      judge 分数为参考（advisory），不影响 pass/fail 判定。")
-    return 0 if passed == len(cases) else 1
+    return 0 if passed == len(cases) and unique_trace_ids else 1
 
 
 if __name__ == "__main__":

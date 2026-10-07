@@ -9,7 +9,8 @@ from typing import Any, Callable
 from .llm import LLMClient
 from .memory.extract import extract_candidates
 from .memory.store import MemoryRejected, PreferenceStore
-from .policy_gate import check_tool_call, scan_tool_text
+from .policy_gate import (LOW_CONFIDENCE_THRESHOLD, check_tool_call,
+                          scan_tool_text)
 from .state import (ASRResult, PlanStep, PolicyDecision, ToolCall, ToolResult,
                     TraceEvent, TripPilotState)
 from .tools import ToolError, fixture_key_for, get_tool
@@ -93,7 +94,8 @@ def _match_place_answer(asr: ASRResult, answer: object) -> str | None:
 def clarify_node(state: TripPilotState) -> dict[str, Any]:
     asr = state.asr_result
     reasons: list[str] = []
-    low_confidence = bool(asr and asr.confidence < 0.6)
+    low_confidence = bool(
+        asr and asr.confidence < LOW_CONFIDENCE_THRESHOLD)
     if asr and low_confidence:
         reasons.append(f"asr_low_confidence({asr.confidence:.2f})")
     if asr and len(asr.place_entities) > 1:

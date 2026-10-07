@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from eval.eval_runner import _memory_events_ok, run_case
+from eval.eval_runner import _memory_events_ok, load_dataset, run_case
 from trippilot.graph import memory_confirm_id
 from trippilot.memory.store import PreferenceStore, hash_embedder
 from trippilot.state import TraceEvent
@@ -34,6 +36,29 @@ def test_unknown_success_criterion_fails_case():
     assert result["criterion_failures"] == [
         "unknown success criterion: not_registered"
     ]
+
+
+def test_timeout_after_create_is_retried_without_duplicate_reminder():
+    dataset = load_dataset(Path("fixtures/dataset_v0.jsonl"))
+    case = next(item for item in dataset
+                if item["case_id"] == "TP-RECOV-002")
+
+    result = run_case(case)
+
+    assert result["passed"] is True
+    assert result["criterion_failures"] == []
+
+
+def test_ambiguous_place_is_bound_before_reminder_creation():
+    dataset = load_dataset(Path("fixtures/dataset_v0.jsonl"))
+    case = next(item for item in dataset
+                if item["case_id"] == "TP-AMBIG-002")
+
+    result = run_case(case)
+
+    assert result["passed"] is True
+    assert result["sequence_check"] is True
+    assert result["criterion_failures"] == []
 
 
 def test_memory_events_reject_mismatched_confirm_id(store):
