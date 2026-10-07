@@ -10,15 +10,15 @@ from __future__ import annotations
 import hashlib
 import uuid
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Literal
 
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
-from qdrant_client.models import (Distance, FieldCondition, Filter, MatchValue,
-                                  HnswConfigDiff, PayloadSchemaType,
-                                  PointStruct, VectorParams)
+from qdrant_client.models import (DatetimeRange, Distance, FieldCondition,
+                                  Filter, MatchValue, HnswConfigDiff,
+                                  PayloadSchemaType, PointStruct, VectorParams)
 
 from ..policy_gate import evaluate_memory_candidate
 
@@ -332,6 +332,26 @@ class PreferenceStore:
             self._client.delete(COLLECTION, points_selector=Filter(must=[
                 FieldCondition(key="user_id",
                                match=MatchValue(value=user_id))]))
+
+    def forget_expired(self, older_than_days: int) -> int:
+        """删除达到指定存放天数的记忆，返回删除条数。"""
+        if not self._ready():
+            return 0
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        expired = Filter(must=[
+            FieldCondition(
+                key="created_at", range=DatetimeRange(lte=cutoff)),
+        ])
+        count = self._client.count(
+            COLLECTION, count_filter=expired, exact=True).count
+        if count == 0:
+            return 0
+
+        # 单进程原型没有后台调度器；更重要的是删除具有破坏性，只能由用户说
+        # “忘掉”或显式运维触发，不能在后台静默过期。
+        self._client.delete(COLLECTION, points_selector=expired)
+        return count
 
     def close(self) -> None:
         self._client.close()

@@ -2,6 +2,7 @@
 
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import ModuleType
 
@@ -173,6 +174,23 @@ def test_forget_all(store):
     store.forget_all(UID)
     assert store.recall(UID, "偏好") == []
     assert len(store.recall("u_other", "偏好")) == 1
+
+
+def test_forget_expired(store):
+    _, old_id = store.remember(UID, "旧偏好：坐地铁", kind="other")
+    _, new_id = store.remember(UID, "新偏好：骑自行车", kind="other")
+    old_created_at = (
+        datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    store._client.set_payload(
+        "preferences",
+        payload={"created_at": old_created_at},
+        points=[old_id],
+    )
+
+    assert store.forget_expired(30) == 1
+    assert store.get(old_id) is None
+    assert store.get(new_id) is not None
+    assert store.forget_expired(30) == 0
 
 
 def _load_cases():
