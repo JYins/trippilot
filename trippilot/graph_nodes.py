@@ -388,7 +388,7 @@ def _capture_candidate(store: PreferenceStore, user_id: str,
         source_type=candidate.get("source_type", "chat"),
         is_transient=candidate.get("is_transient", False),
     )
-    if status == "written":
+    if status in ("written", "updated"):
         return "written", memory_id
     if confirmed:
         return "written", _insert_candidate(store, user_id, candidate)

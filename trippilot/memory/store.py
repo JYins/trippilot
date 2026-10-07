@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from qdrant_client.models import (Distance, FieldCondition, Filter, MatchValue,
                                   HnswConfigDiff, PayloadSchemaType,
@@ -31,6 +31,10 @@ DEFAULT_PATH = Path.home() / ".trippilot" / "memory"
 # bge-small-zh-v1.5 输出 512 维；旧 384 维 collection 已不兼容，
 # 见 docs/decisions/20261008-embedding-bge.md。
 EXPECTED_DIM = 512
+# BGE 向量归一化后走余弦：同一事实的复述/改写通常 >0.95，明确不同的事实
+# 通常 <0.85，0.92 在两者之间留出 margin。这是基于推理定的起点；重调时
+# 必须用 eval/embed_recall_probe.py 的 21 条 probe 守住 recall@3 不下降。
+DEDUP_THRESHOLD = 0.92
 
 
 class Preference(BaseModel):
@@ -41,6 +45,7 @@ class Preference(BaseModel):
     sensitivity: Sensitivity = "normal"
     source_type: str = "chat"
     created_at: str = ""
+    score: float | None = Field(default=None, exclude=True)
 
 
 class MemoryRejected(Exception):
@@ -176,8 +181,9 @@ class PreferenceStore:
         self._create_collection(dim)
 
     @staticmethod
-    def _to_preference(point_id: object, payload: dict) -> "Preference":
-        return Preference(**{**payload, "id": str(point_id)})
+    def _to_preference(point_id: object, payload: dict,
+                       score: float | None = None) -> "Preference":
+        return Preference(**{**payload, "id": str(point_id), "score": score})
 
     def remember(self, user_id: str, content: str, kind: PreferenceKind,
                  sensitivity: Sensitivity = "normal",
@@ -185,8 +191,8 @@ class PreferenceStore:
                  is_transient: bool = False) -> tuple[str, str | None]:
         """先过 Memory Gate 再写。
 
-        返回 ("written", id) / ("needs_confirm", None)；
-        deny 直接抛 MemoryRejected。needs_confirm 的不写入，
+        返回 ("written", id) / ("updated", id) /
+        ("needs_confirm", None)；deny 直接抛 MemoryRejected。needs_confirm 的不写入，
         由调用方（graph 的 human_confirm 流程）确认后再处理。
         """
         decision = evaluate_memory_candidate({
@@ -197,6 +203,23 @@ class PreferenceStore:
             raise MemoryRejected(decision.reason_code, decision.detail)
         if decision.decision == "confirm":
             return "needs_confirm", None
+
+        # 每次写入多一次向量召回（BGE 热状态约 17ms），换取库里不出现同一事实
+        # 的两个值；kind 过滤避免不同类型的短文本互相覆盖。
+        matches = self.recall(user_id, content, top_k=3, kind=kind)
+        if (matches and matches[0].score is not None
+                and matches[0].score >= DEDUP_THRESHOLD):
+            status, updated = self.update(
+                matches[0].id,
+                content=content,
+                kind=kind,
+                sensitivity=sensitivity,
+                source_type=source_type,
+                is_transient=is_transient,
+            )
+            if status == "needs_confirm":
+                return "needs_confirm", None
+            return "updated", updated.id
         return "written", self._insert(user_id, content, kind,
                                        sensitivity, source_type)
 
@@ -221,7 +244,7 @@ class PreferenceStore:
 
     def recall(self, user_id: str, query: str, top_k: int = 5,
                kind: PreferenceKind | None = None) -> list[Preference]:
-        """向量检索 + user_id 过滤；还没记过任何东西时返回 []。"""
+        """向量检索 + user_id 过滤；命中项的 score 是余弦相似度。"""
         if not self._ready():
             return []
         vec = self._embed([query])[0]
@@ -235,7 +258,7 @@ class PreferenceStore:
             limit=top_k).points
         # 取舍：cosine 可为负；fake 向量（哈希词袋）恒非负所以分数 >= 0；
         # > 0 会静默丢掉弱相关（正交或负相关）的命中，换召回率保精确率
-        return [self._to_preference(h.id, h.payload)
+        return [self._to_preference(h.id, h.payload, h.score)
                 for h in hits if h.score > 0]
 
     def get(self, memory_id: str) -> Preference | None:

@@ -53,6 +53,41 @@ def test_remember_recall_roundtrip(store):
     assert hits[0].kind == "place"
 
 
+def test_remember_dedup_same_fact(store):
+    content = "公司地址：望京 SOHO"
+    first_status, first_id = store.remember(UID, content, kind="place")
+    second_status, second_id = store.remember(UID, content, kind="place")
+
+    assert first_status == "written"
+    assert (second_status, second_id) == ("updated", first_id)
+    assert store.get(first_id).content == content
+    assert store._client.count("preferences", exact=True).count == 1
+
+
+def test_remember_dedup_different_facts(store):
+    first_status, first_id = store.remember(
+        UID, "公司地址：望京 SOHO", kind="place")
+    second_status, second_id = store.remember(
+        UID, "最喜欢的饮料：热拿铁", kind="place")
+
+    assert first_status == "written"
+    assert second_status == "written"
+    assert first_id != second_id
+    assert store._client.count("preferences", exact=True).count == 2
+
+
+def test_remember_dedup_sensitive_still_confirms(store):
+    content = "联系电话：13800138000"
+    first = store.remember(
+        UID, content, kind="other", sensitivity="sensitive")
+    second = store.remember(
+        UID, content, kind="other", sensitivity="sensitive")
+
+    assert first == ("needs_confirm", None)
+    assert second == ("needs_confirm", None)
+    assert store._client.collection_exists("preferences") is False
+
+
 def test_recall_isolated_by_user(store):
     store.remember("u1", "常去地点：首都机场 T3", kind="place")
     store.remember("u2", "常去地点：大兴机场", kind="place")
