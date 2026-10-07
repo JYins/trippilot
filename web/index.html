@@ -508,8 +508,18 @@
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({session_id: sessionId, text, vehicle_state: vehicleState, ...extra}),
         });
-        const body = await response.json().catch(() => ({}));
+        // JSON 解析失败不能吞：解析错了后面渲染的全是假成功。
+        let body;
+        try {
+          body = await response.json();
+        } catch {
+          throw new Error("后端没有返回合法 JSON，请检查 api 参数指向的地址");
+        }
         if (!response.ok) throw new Error(body.detail || `后端返回 ${response.status}`);
+        // 契约缺了关键字段就不渲染，避免 trace_id 之类显示成 undefined。
+        if (!body || !Array.isArray(body.visited_nodes) || !Array.isArray(body.trace)) {
+          throw new Error("后端返回的结构不符合 /turn 契约，请检查 api 参数指向的地址");
+        }
         sessionId = body.session_id;
         addMessage("assistant", body.final_response || "本轮没有返回回答。");
         renderTimeline(body);
