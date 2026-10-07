@@ -104,7 +104,8 @@ def test_direct_construction_is_flagged(tmp_path):
 
 def test_full_audit_report_passes():
     report = run_harness_audit(ROOT / "fixtures" / "dataset_v0.jsonl")
-    assert len(report["cases"]) == 15
+    # 33 = 旧 15 条 + TP-REAL-001~014（14 条） + TP-REAL-015a~d（4 条）
+    assert len(report["cases"]) == 33
     failed = [r for r in report["cases"] if not r["passed"]]
     assert not failed, f"未通过的用例: {failed}"
     assert report["seam"]["passed"], f"seam 问题: {report['seam']['issues']}"
