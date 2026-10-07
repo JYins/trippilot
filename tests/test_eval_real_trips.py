@@ -79,16 +79,12 @@ def test_spotcheck_006_passes():
     assert result["passed"] is True, result
 
 
-def test_spotcheck_010_honestly_fails():
+def test_spotcheck_010_passes():
+    # 任务三之前 media 工具不存在，这条用例诚实失败（unknown_tool）。
+    # 工具实现后改为断言通过：失败断言已失去意义，留着会跟任务目标打架。
     cases = load_dataset(DATASET)
     case = next(case for case in cases if case["case_id"] == "TP-REAL-010")
 
     result = run_case(case)
 
-    assert result["passed"] is False
-    failure_reasons = [
-        *result["policy_reasons"],
-        *result["verification"].get("failures", []),
-        *result["criterion_failures"],
-    ]
-    assert any("unknown_tool" in reason for reason in failure_reasons)
+    assert result["passed"] is True, result

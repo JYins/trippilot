@@ -306,7 +306,7 @@ def _no_forced_navigation(out, _store, expected) -> bool:
 
 
 def _restriction_answered(out, _store, expected) -> bool:
-    """断言限行工具返回日期和限行尾号；任务三尚未实现工具，当前会诚实失败。"""
+    """任务三已实现工具；断言限行工具返回日期和限行尾号。"""
     return any(
         result.tool == "restriction.query"
         and result.ok
@@ -452,7 +452,7 @@ def _weather_checked(out, _store, expected) -> bool:
 
 
 def _track_changed(out, _store, expected) -> bool:
-    """断言 media.next 返回曲目信息；任务三尚未实现媒体工具，当前会诚实失败。"""
+    """任务三已实现工具；断言 media.next 返回曲目信息。"""
     return any(
         result.tool == "media.next"
         and result.ok
@@ -463,7 +463,7 @@ def _track_changed(out, _store, expected) -> bool:
 
 
 def _question_answered(out, _store, expected) -> bool:
-    """断言 knowledge.qa 返回 answer；任务三尚未实现知识工具，当前会诚实失败。"""
+    """任务三已实现工具；断言 knowledge.qa 返回 answer。"""
     return any(
         result.tool == "knowledge.qa"
         and result.ok
@@ -479,7 +479,7 @@ def _no_navigation_triggered(out, _store, expected) -> bool:
 
 
 def _ac_adjusted(out, _store, expected) -> bool:
-    """断言 vehicle.climate 返回空调状态；任务三尚未实现车控工具，当前会诚实失败。"""
+    """任务三已实现工具；断言 vehicle.climate 返回空调状态。"""
     return any(
         result.tool == "vehicle.climate"
         and result.ok
@@ -490,21 +490,21 @@ def _ac_adjusted(out, _store, expected) -> bool:
 
 
 def _sunroof_opened(out, _store, expected) -> bool:
-    """断言 vehicle.sunroof 成功执行；任务三尚未实现车控工具，当前会诚实失败。"""
+    """任务三已实现工具；断言 vehicle.sunroof 成功执行。"""
     return any(result.tool == "vehicle.sunroof" and result.ok
                for result in out.tool_results)
 
 
 def _volume_lowered(out, _store, expected) -> bool:
-    """断言 media.volume 成功执行；任务三尚未实现媒体工具，当前会诚实失败。"""
+    """任务三已实现工具；断言 media.volume 成功执行。"""
     return any(result.tool == "media.volume" and result.ok
                for result in out.tool_results)
 
 
 def _all_announced(out, _store, expected) -> bool:
-    """断言三个动作的数据结果均就位且任务完成。
+    """任务三已实现工具；断言三个动作的数据结果均就位且任务完成。
 
-    stub 不能证明逐项播报；当前子工具尚未实现，因此本断言会诚实失败。
+    stub 不能证明逐项播报，本断言只检查数据结果和任务完成状态。
     """
     actions_done = (
         _ac_adjusted(out, _store, expected)
