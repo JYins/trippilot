@@ -62,7 +62,7 @@ def test_driving_map_route_executes_with_degraded_option_count():
     map_call = next(call for call in out.tool_calls
                     if call.tool == "map.route")
     map_result = next(result for result in out.tool_results
-                      if result.tool == "map")
+                      if result.tool == "map.route")
     degrade_event = next(event for event in out.trace
                          if event.event == "degraded_params")
 

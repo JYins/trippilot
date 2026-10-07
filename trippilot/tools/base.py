@@ -39,17 +39,18 @@ class BaseTool:
 
     def _run_recorded(self, call: ToolCall) -> ToolResult:
         path = self._fixture_path(call)
+        # ToolResult.tool 统一用点分操作名，和 ReminderTool / _unsupported_operation 及评测过滤一致。
         if not path.exists():
-            return ToolResult(tool=self.name, ok=False, source="recorded",
+            return ToolResult(tool=call.tool, ok=False, source="recorded",
                               error=f"missing recorded fixture: {path.name}")
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
-            return ToolResult(tool=self.name, ok=False, source="recorded",
+            return ToolResult(tool=call.tool, ok=False, source="recorded",
                               error=f"bad fixture json: {e}")
         expected = data.pop("expect", None)
         if expected is not None and not isinstance(expected, dict):
-            return ToolResult(tool=self.name, ok=False, source="recorded",
+            return ToolResult(tool=call.tool, ok=False, source="recorded",
                               error=f"bad fixture expect: {path.name}")
         for field, wanted in (expected or {}).items():
             actual = call.args.get(field)
@@ -59,13 +60,13 @@ class BaseTool:
                 continue
             if actual != wanted:
                 return ToolResult(
-                    tool=self.name,
+                    tool=call.tool,
                     ok=False,
                     source="recorded",
                     error=(f"recorded fixture parameter mismatch: {field} "
                            f"expected {wanted!r}, got {actual!r}"),
                 )
-        return ToolResult(tool=self.name, ok=True, data=data, source="recorded")
+        return ToolResult(tool=call.tool, ok=True, data=data, source="recorded")
 
     # -- live (manual only) ------------------------------------------------
     def _run_live(self, call: ToolCall) -> ToolResult:
