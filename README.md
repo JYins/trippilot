@@ -4,6 +4,24 @@
 
 完整产品计划见 `~/workspace/goals/goal/files/车企Agent项目计划.md`。技术规范（代码风格、commit 规范、决策记录铁律）见 `AGENTS.md`，那是写代码的人看的，这份是看项目的人看的。
 
+## 在线体验 demo
+
+这是一个点开链接就能玩的座舱 Agent：输入一句话，看它怎么拆任务、走 trajectory。
+
+在线链接：（部署后填链接）
+
+- 车况是纯软件模拟，不来自真车。
+- 地图和天气使用录制数据，不代表实时结果。
+- 无需 API key，打开即玩。
+
+首页全景：
+
+![TripPilot demo 首页全景](docs/screenshots/demo-home.png)
+
+一条场景问答的 trajectory 时间线：
+
+![TripPilot demo trajectory 时间线](docs/screenshots/demo-trajectory.png)
+
 ## 项目状态
 
 - **v0.1 脚手架 ✅ 落地**：intent→clarify→planner→policy_gate→confirm→tools→verifier→recovery 主循环全跑通，68 个测试全绿，轨迹级回归 12 条全过。
