@@ -144,12 +144,20 @@ def planner_node(state: TripPilotState, llm: LLMClient) -> dict[str, Any]:
          "content": item.get("content", "")}
         for item in state.preferences[:3]
     ]
+    place_names: list[str] = []
+    if state.asr_result:
+        place_names = [place["name"] for place in state.asr_result.place_entities
+                       if place.get("name")]
     steps = llm.plan(
         intent=state.intent,
         context={"session_id": state.session_id,
                  **state.trip_context,
-                 "preferences": preferences},
-        available_tools=["map.route", "weather.now", "reminder.create",
+                 "vehicle_state": state.vehicle_state,
+                 "preferences": preferences,
+                 # 真实规划 prompt 会带识别实体；stub 也只据此解析目的地，避免猜原文。
+                 "place_names": place_names},
+        available_tools=["map.route", "weather.now", "weather.forecast",
+                         "reminder.create",
                          "trip_log.append", "restriction.query", "media.next",
                          "media.volume", "vehicle.climate", "vehicle.sunroof",
                          "knowledge.qa"],
