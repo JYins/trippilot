@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -246,6 +247,299 @@ def _destination_bound(out, _store, expected) -> bool:
     return out.trip_context.get("destination") == expected
 
 
+def _clarify_asked(out, _store, expected) -> bool:
+    """断言运行时确实触发了澄清；不把 fixture 里的 clarify_answer 当作澄清。"""
+    return any(
+        event.node == "clarify"
+        and event.event == "clarify_checked"
+        and event.payload.get("need_clarify") is True
+        for event in out.trace
+    )
+
+
+def _clarify_named_options(out, _store, expected) -> bool:
+    """断言运行时因多地点歧义点名选项。
+
+    入口、分区、航站楼型点名澄清当前运行时不支持，对应用例会诚实失败；
+    这是已知能力缺口，不是断言缺陷。
+    """
+    return any(
+        event.node == "clarify"
+        and event.event == "clarify_checked"
+        and event.payload.get("need_clarify") is True
+        and any(str(reason).startswith("place_ambiguity(")
+                for reason in event.payload.get("reasons", []))
+        for event in out.trace
+    )
+
+
+def _destination_updated(out, _store, expected) -> bool:
+    """断言本轮结束时行程目的地等于期望字符串；不证明跨轮状态保持。"""
+    return out.trip_context.get("destination") == expected
+
+
+def _weather_tool_called(out, _store, expected) -> bool:
+    """断言本轮产生过 weather 命名空间的工具调用；不要求调用成功。"""
+    return any(call.tool.startswith("weather.") for call in out.tool_calls)
+
+
+def _weather_verdict_given(out, _store, expected) -> bool:
+    """断言天气结论所需数据已取回，且本轮正常走完回答环节。
+
+    DeterministicStub 的 final_response 是模板句，不能证明已给出真正的口语化
+    出行结论；该真实性要等真实 LLM 实测，不在本断言范围内。
+    """
+    has_verdict_data = any(
+        result.tool.startswith("weather.")
+        and result.ok
+        and isinstance(result.data, dict)
+        and ("verdict" in result.data or "advice" in result.data)
+        for result in out.tool_results
+    )
+    return (has_verdict_data
+            and out.verification_result.get("task_completed") is True)
+
+
+def _no_forced_navigation(out, _store, expected) -> bool:
+    """断言本轮没有调用 map.route；不判断回复是否曾口头建议导航。"""
+    return not any(call.tool == "map.route" for call in out.tool_calls)
+
+
+def _restriction_answered(out, _store, expected) -> bool:
+    """断言限行工具返回日期和限行尾号；任务三尚未实现工具，当前会诚实失败。"""
+    return any(
+        result.tool == "restriction.query"
+        and result.ok
+        and isinstance(result.data, dict)
+        and "restricted_tails" in result.data
+        and "date" in result.data
+        for result in out.tool_results
+    )
+
+
+def _plate_not_fabricated(out, _store, expected) -> bool:
+    """断言回复、工具参数和工具结果中均无中国大陆普通车牌样式；不识别其他牌照格式。"""
+    plate_pattern = re.compile(
+        r"[京津沪渝冀豫云辽黑湘皖鲁新苏浙赣鄂桂甘晋蒙陕吉闽贵粤青藏川宁琼]"
+        r"[A-Z][A-Z0-9]{5}"
+    )
+    call_args = json.dumps(
+        [call.args for call in out.tool_calls],
+        ensure_ascii=False,
+        default=str,
+    )
+    result_data = json.dumps(
+        [result.data for result in out.tool_results],
+        ensure_ascii=False,
+        default=str,
+    )
+    return all(plate_pattern.search(text) is None
+               for text in (out.final_response or "", call_args, result_data))
+
+
+def _route_planned(out, _store, expected) -> bool:
+    """断言 map.route 成功返回非空 routes；不评价路线是否合理或已播报。"""
+    return any(
+        result.tool == "map.route"
+        and result.ok
+        and isinstance(result.data, dict)
+        and bool(result.data.get("routes"))
+        for result in out.tool_results
+    )
+
+
+def _route_avoids_congestion(out, _store, expected) -> bool:
+    """断言成功路线的全部非空 options 均未标记 congested/heavy；不验证实时路况。"""
+    for result in out.tool_results:
+        if (result.tool != "map.route" or not result.ok
+                or not isinstance(result.data, dict)):
+            continue
+        options = [
+            option
+            for route in result.data.get("routes", [])
+            for option in route.get("options", [])
+        ]
+        if (options
+                and all(option.get("congestion", "smooth")
+                        not in ("congested", "heavy")
+                        for option in options)):
+            return True
+    return False
+
+
+def _eta_given(out, _store, expected) -> bool:
+    """断言 ETA 可计算的 duration_min 已返回。
+
+    stub 的模板回复不会念出具体时间；这里只检查数据就位，口语播报留待真实
+    LLM 实测。
+    """
+    return any(
+        option.get("duration_min")
+        for result in out.tool_results
+        if result.tool == "map.route" and result.ok
+        and isinstance(result.data, dict)
+        for route in result.data.get("routes", [])
+        for option in route.get("options", [])
+    )
+
+
+def _remaining_distance_given(out, _store, expected) -> bool:
+    """断言成功路线结果中含 truthy 的 remaining_km；不证明回复已口头报出距离。"""
+    return any(
+        option.get("remaining_km")
+        for result in out.tool_results
+        if result.tool == "map.route" and result.ok
+        and isinstance(result.data, dict)
+        for route in result.data.get("routes", [])
+        for option in route.get("options", [])
+    )
+
+
+def _remaining_time_given(out, _store, expected) -> bool:
+    """断言成功路线结果中含 truthy 的 remaining_min；不证明回复已口头报出时长。"""
+    return any(
+        option.get("remaining_min")
+        for result in out.tool_results
+        if result.tool == "map.route" and result.ok
+        and isinstance(result.data, dict)
+        for route in result.data.get("routes", [])
+        for option in route.get("options", [])
+    )
+
+
+def _distance_given(out, _store, expected) -> bool:
+    """断言成功路线的任一 option 含 truthy 的 distance_km；不校验数值准确性。"""
+    return any(
+        option.get("distance_km")
+        for result in out.tool_results
+        if result.tool == "map.route" and result.ok
+        and isinstance(result.data, dict)
+        for route in result.data.get("routes", [])
+        for option in route.get("options", [])
+    )
+
+
+def _duration_given(out, _store, expected) -> bool:
+    """断言成功路线的任一 option 含 truthy 的 duration_min；不校验数值准确性。"""
+    return any(
+        option.get("duration_min")
+        for result in out.tool_results
+        if result.tool == "map.route" and result.ok
+        and isinstance(result.data, dict)
+        for route in result.data.get("routes", [])
+        for option in route.get("options", [])
+    )
+
+
+def _rest_stop_mentioned(out, _store, expected) -> bool:
+    """断言长途休息点数据已就位且任务完成；不虚构 stub 已做口语播报。"""
+    has_rest_stops = any(
+        option.get("rest_stops")
+        for result in out.tool_results
+        if result.tool == "map.route" and result.ok
+        and isinstance(result.data, dict)
+        for route in result.data.get("routes", [])
+        for option in route.get("options", [])
+    )
+    return (has_rest_stops
+            and out.verification_result.get("task_completed") is True)
+
+
+def _weather_checked(out, _store, expected) -> bool:
+    """断言天气工具至少成功返回一次；不评价天气内容或回复质量。"""
+    return any(result.tool.startswith("weather.") and result.ok
+               for result in out.tool_results)
+
+
+def _track_changed(out, _store, expected) -> bool:
+    """断言 media.next 返回曲目信息；任务三尚未实现媒体工具，当前会诚实失败。"""
+    return any(
+        result.tool == "media.next"
+        and result.ok
+        and isinstance(result.data, dict)
+        and ("track" in result.data or "now_playing" in result.data)
+        for result in out.tool_results
+    )
+
+
+def _question_answered(out, _store, expected) -> bool:
+    """断言 knowledge.qa 返回 answer；任务三尚未实现知识工具，当前会诚实失败。"""
+    return any(
+        result.tool == "knowledge.qa"
+        and result.ok
+        and isinstance(result.data, dict)
+        and "answer" in result.data
+        for result in out.tool_results
+    )
+
+
+def _no_navigation_triggered(out, _store, expected) -> bool:
+    """断言本轮没有调用任何 map 工具；不判断回复文本是否提到地点。"""
+    return not any(call.tool.startswith("map.") for call in out.tool_calls)
+
+
+def _ac_adjusted(out, _store, expected) -> bool:
+    """断言 vehicle.climate 返回空调状态；任务三尚未实现车控工具，当前会诚实失败。"""
+    return any(
+        result.tool == "vehicle.climate"
+        and result.ok
+        and isinstance(result.data, dict)
+        and ("climate" in result.data or "ac" in result.data)
+        for result in out.tool_results
+    )
+
+
+def _sunroof_opened(out, _store, expected) -> bool:
+    """断言 vehicle.sunroof 成功执行；任务三尚未实现车控工具，当前会诚实失败。"""
+    return any(result.tool == "vehicle.sunroof" and result.ok
+               for result in out.tool_results)
+
+
+def _volume_lowered(out, _store, expected) -> bool:
+    """断言 media.volume 成功执行；任务三尚未实现媒体工具，当前会诚实失败。"""
+    return any(result.tool == "media.volume" and result.ok
+               for result in out.tool_results)
+
+
+def _all_announced(out, _store, expected) -> bool:
+    """断言三个动作的数据结果均就位且任务完成。
+
+    stub 不能证明逐项播报；当前子工具尚未实现，因此本断言会诚实失败。
+    """
+    actions_done = (
+        _ac_adjusted(out, _store, expected)
+        and _sunroof_opened(out, _store, expected)
+        and _volume_lowered(out, _store, expected)
+    )
+    return (actions_done
+            and out.verification_result.get("task_completed") is True)
+
+
+def _no_wild_guess(out, _store, expected) -> bool:
+    """断言 map.route 目的地只取允许列表值或空值；未发起导航也算未瞎猜。"""
+    allowed = set(expected) | {""}
+    return all(
+        call.args.get("destination", "") in allowed
+        for call in out.tool_calls
+        if call.tool == "map.route"
+    )
+
+
+def _destination_stable_across_turns(out, _store, expected) -> bool:
+    """断言本轮未丢失或篡改会话目的地。
+
+    TP-REAL-015 降级为单轮 case 后，这不是真正的跨轮保持；跨轮断言需要尚未
+    实现的多轮 runner，见 docs/decisions/20261008-real-trips-fixtures.md。
+    """
+    if out.trip_context.get("destination") != expected:
+        return False
+    return all(
+        call.args.get("destination", "") in (expected, "")
+        for call in out.tool_calls
+        if call.tool == "map.route"
+    )
+
+
 CriterionCheck = Callable[[Any, PreferenceStore, Any], bool]
 CRITERION_CHECKS: dict[str, CriterionCheck] = {
     "reminder_created": _reminder_created,
@@ -260,6 +554,32 @@ CRITERION_CHECKS: dict[str, CriterionCheck] = {
     "preferences_written": _preferences_written,
     "clarify_before_side_effect": _clarify_before_side_effect,
     "destination_bound": _destination_bound,
+    "clarify_asked": _clarify_asked,
+    "clarify_named_options": _clarify_named_options,
+    "destination_updated": _destination_updated,
+    "weather_tool_called": _weather_tool_called,
+    "weather_verdict_given": _weather_verdict_given,
+    "no_forced_navigation": _no_forced_navigation,
+    "restriction_answered": _restriction_answered,
+    "plate_not_fabricated": _plate_not_fabricated,
+    "route_planned": _route_planned,
+    "route_avoids_congestion": _route_avoids_congestion,
+    "eta_given": _eta_given,
+    "remaining_distance_given": _remaining_distance_given,
+    "remaining_time_given": _remaining_time_given,
+    "distance_given": _distance_given,
+    "duration_given": _duration_given,
+    "rest_stop_mentioned": _rest_stop_mentioned,
+    "weather_checked": _weather_checked,
+    "track_changed": _track_changed,
+    "question_answered": _question_answered,
+    "no_navigation_triggered": _no_navigation_triggered,
+    "ac_adjusted": _ac_adjusted,
+    "sunroof_opened": _sunroof_opened,
+    "volume_lowered": _volume_lowered,
+    "all_announced": _all_announced,
+    "no_wild_guess": _no_wild_guess,
+    "destination_stable_across_turns": _destination_stable_across_turns,
 }
 
 
