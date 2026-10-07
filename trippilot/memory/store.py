@@ -21,6 +21,7 @@ from qdrant_client.models import (DatetimeRange, Distance, FieldCondition,
                                   PayloadSchemaType, PointStruct, VectorParams)
 
 from ..policy_gate import evaluate_memory_candidate
+from .audit import MemoryAudit
 
 EmbedFn = Callable[[list[str]], list[list[float]]]
 PreferenceKind = Literal["place", "label", "auth", "other"]
@@ -109,9 +110,13 @@ class PreferenceStore:
     """
 
     def __init__(self, path: str | Path = DEFAULT_PATH,
-                 embed_fn: EmbedFn | None = None) -> None:
+                 embed_fn: EmbedFn | None = None,
+                 audit_path: str | Path | None = None) -> None:
         self._client = QdrantClient(path=str(path))
         self._embed_fn = embed_fn
+        if audit_path is None:
+            audit_path = Path(path) / "audit.db"
+        self._audit = MemoryAudit(audit_path)
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
         if self._embed_fn is None:
@@ -240,6 +245,10 @@ class PreferenceStore:
         )
         self._client.upsert(COLLECTION, [PointStruct(
             id=pref.id, vector=vec, payload=pref.model_dump())])
+        # 审计与向量库同盘，失败通常意味着磁盘满等整体故障，必须抛给调用方。
+        # remember 重试会被去重为 update，不会生成重复偏好。
+        self._audit.log_event(user_id, "written", memory_id=pref.id,
+                              content=content)
         return pref.id
 
     def recall(self, user_id: str, query: str, top_k: int = 5,
@@ -315,6 +324,8 @@ class PreferenceStore:
         pref = Preference(**data)
         self._client.upsert(COLLECTION, [PointStruct(
             id=pref.id, vector=vec, payload=pref.model_dump())])
+        self._audit.log_event(old.user_id, "updated", memory_id=pref.id,
+                              content=pref.content)
         return "written", pref
 
     def _stored_vector(self, memory_id: str) -> list[float]:
@@ -324,14 +335,18 @@ class PreferenceStore:
         return list(records[0].vector)
 
     def forget(self, memory_id: str) -> None:
-        if self._ready():
-            self._client.delete(COLLECTION, points_selector=[memory_id])
+        old = self.get(memory_id)
+        if old is None:
+            return
+        self._client.delete(COLLECTION, points_selector=[memory_id])
+        self._audit.log_event(old.user_id, "forgotten", memory_id=memory_id)
 
     def forget_all(self, user_id: str) -> None:
         if self._ready():
             self._client.delete(COLLECTION, points_selector=Filter(must=[
                 FieldCondition(key="user_id",
                                match=MatchValue(value=user_id))]))
+        self._audit.log_event(user_id, "forgotten_all", reason=user_id)
 
     def forget_expired(self, older_than_days: int) -> int:
         """删除达到指定存放天数的记忆，返回删除条数。"""
@@ -354,4 +369,5 @@ class PreferenceStore:
         return count
 
     def close(self) -> None:
+        self._audit.close()
         self._client.close()
