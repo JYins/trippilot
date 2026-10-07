@@ -390,7 +390,6 @@
       if (item.node === "policy_gate") return describePolicy(payload.decisions || []);
       if (item.node === "human_confirm") return payload.confirmed ? "输入：用户确认；输出：确认凭证通过。" : "输出：等待用户确认，尚未执行后续操作。";
       if (item.node === "tool_executor") return describeResults(payload.results || []);
-      if (item.node === "verifier") return describeVerification(payload);
       if (item.node === "memory_capture") {
         if (payload.written?.length) return `输出：写入 ${payload.written.length} 条已确认偏好。`;
         if (payload.pending) return `输出：有 ${payload.pending} 条偏好等待用户确认。`;
@@ -402,12 +401,11 @@
 
     function summariesForNode(response, node, visited) {
       if (!visited) return ["本轮未经过该节点，因此没有输入输出事件。"];
+      // verifier 的 trace 事件 payload 里没有 ok 字段，用顶层 verification 摘要代替，
+      // 否则会把成功验证说成"安全检查未通过"，还和正确的摘要前后矛盾。
+      if (node === "verifier") return [describeVerification(response.verification)];
       const summaries = (response.trace || []).filter((item) => item.node === node).map(describeEvent);
       if (node === "policy_gate" && !summaries.length) summaries.push(describePolicy(response.policy_decisions || []));
-      if (node === "verifier") {
-        const responseSummary = describeVerification(response.verification);
-        if (!summaries.includes(responseSummary)) summaries.push(responseSummary);
-      }
       return summaries.length ? summaries : ["节点已经过，但本轮 trace 没有记录可展示的事件。"];
     }
 
