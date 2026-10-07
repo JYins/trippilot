@@ -21,6 +21,12 @@ TOOL_POLICIES = {
     "reminder.create": ("reminder", "create"),
     "reminder.delete": ("reminder", "delete"),
     "trip_log.append": ("trip_log", "create"),
+    "media.next": ("media", "update"),
+    "media.volume": ("media", "update"),
+    "vehicle.climate": ("vehicle", "update"),
+    "vehicle.sunroof": ("vehicle", "update"),
+    "restriction.query": ("restriction", "read"),
+    "knowledge.qa": ("knowledge", "read"),
 }
 
 # ASR 置信度阈值：地点/时间实体低于此值时，禁止产生副作用的调用
@@ -93,7 +99,15 @@ def evaluate(
         return PolicyDecision(decision="confirm", reason_code="share_needs_confirm",
                               detail="分享动作需用户确认")
 
-    # 8. 默认：读允许，写走确认
+    # 8. 模拟座舱控制（media/vehicle）：纯软件模拟、不控制真车，
+    #    已认证车主直接执行；其他角色仍走默认确认通道。
+    #    未来接入真车时必须改为 confirm，不能沿用这条例外。
+    if resource in ("media", "vehicle") and role == "owner":
+        return PolicyDecision(decision="allow",
+                              reason_code="simulated_cabin_owner_allow",
+                              detail="纯模拟座舱控制（不控制真车），车主直接执行")
+
+    # 9. 默认：读允许，写走确认
     if action == "read":
         return PolicyDecision(decision="allow", reason_code="default_read_allow")
     return PolicyDecision(decision="confirm", reason_code="default_write_confirm",
