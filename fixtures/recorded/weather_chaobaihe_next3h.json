@@ -1,0 +1,33 @@
+{
+  "fixture": "weather_chaobaihe_next3h",
+  "note": "录制响应：版本化测试 fixture，不代表实时天气",
+  "expect": {
+    "area": "潮白河"
+  },
+  "now": {
+    "temp_c": 21,
+    "weather": "多云",
+    "wind": "东北风2级",
+    "aqi": 55
+  },
+  "forecast_3h": [
+    {
+      "hour_offset": 1,
+      "weather": "多云",
+      "temp_c": 21
+    },
+    {
+      "hour_offset": 2,
+      "weather": "多云转晴",
+      "temp_c": 22
+    },
+    {
+      "hour_offset": 3,
+      "weather": "晴",
+      "temp_c": 23
+    }
+  ],
+  "verdict": "未来3小时多云转晴，适宜出行",
+  "advice": "河边风大，建议带件外套",
+  "source": "recorded"
+}

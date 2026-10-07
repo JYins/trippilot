@@ -1,0 +1,28 @@
+{
+  "fixture": "map_capital_airport_t3",
+  "note": "录制响应：版本化测试 fixture，不代表实时路况",
+  "expect": {
+    "destination": "首都机场T3"
+  },
+  "routes": [
+    {
+      "origin": "阜通站",
+      "destination": "首都机场T3",
+      "options": [
+        {
+          "mode": "drive",
+          "detail": "京承高速→机场高速→T3航站楼",
+          "distance_km": 24,
+          "duration_min": 38,
+          "congestion": "smooth"
+        },
+        {
+          "mode": "subway",
+          "line": "14号线→首都机场线",
+          "duration_min": 58
+        }
+      ]
+    }
+  ],
+  "source": "recorded"
+}

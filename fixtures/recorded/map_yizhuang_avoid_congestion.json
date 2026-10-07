@@ -1,0 +1,30 @@
+{
+  "fixture": "map_yizhuang_avoid_congestion",
+  "note": "录制响应：版本化测试 fixture，不代表实时路况",
+  "expect": {
+    "destination": "亦庄"
+  },
+  "routes": [
+    {
+      "origin": "阜通站",
+      "destination": "亦庄",
+      "options": [
+        {
+          "mode": "drive",
+          "detail": "京承高速→五环→京沪高速（绕开四环拥堵段）",
+          "distance_km": 32,
+          "duration_min": 45,
+          "congestion": "smooth"
+        },
+        {
+          "mode": "drive",
+          "detail": "机场高速→五环东延→亦庄",
+          "distance_km": 35,
+          "duration_min": 52,
+          "congestion": "smooth"
+        }
+      ]
+    }
+  ],
+  "source": "recorded"
+}

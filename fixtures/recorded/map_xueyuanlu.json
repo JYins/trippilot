@@ -1,0 +1,28 @@
+{
+  "fixture": "map_xueyuanlu",
+  "note": "录制响应：版本化测试 fixture，不代表实时路况",
+  "expect": {
+    "destination": "学院路"
+  },
+  "routes": [
+    {
+      "origin": "阜通站",
+      "destination": "学院路",
+      "options": [
+        {
+          "mode": "drive",
+          "detail": "北四环→学院路",
+          "distance_km": 16.8,
+          "duration_min": 35,
+          "congestion": "smooth"
+        },
+        {
+          "mode": "subway",
+          "line": "14号线→10号线→知春路",
+          "duration_min": 48
+        }
+      ]
+    }
+  ],
+  "source": "recorded"
+}

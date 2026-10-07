@@ -1,0 +1,29 @@
+{
+  "fixture": "map_ulanqab_longhaul",
+  "note": "录制响应：版本化测试 fixture，不代表实时路况",
+  "expect": {
+    "destination": "乌兰察布"
+  },
+  "routes": [
+    {
+      "origin": "阜通站",
+      "destination": "乌兰察布",
+      "options": [
+        {
+          "mode": "drive",
+          "detail": "京藏高速G6→乌兰察布",
+          "distance_km": 350,
+          "duration_min": 240,
+          "congestion": "smooth",
+          "rest_stops": [
+            "官厅服务区（约120km处，建议休息）",
+            "兴和服务区（约240km处）"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_distance_km": 350,
+  "total_duration_min": 240,
+  "source": "recorded"
+}

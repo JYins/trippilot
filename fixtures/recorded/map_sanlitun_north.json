@@ -1,0 +1,28 @@
+{
+  "fixture": "map_sanlitun_north",
+  "note": "录制响应：版本化测试 fixture，不代表实时路况",
+  "expect": {
+    "destination": "三里屯北区"
+  },
+  "routes": [
+    {
+      "origin": "阜通站",
+      "destination": "三里屯北区",
+      "options": [
+        {
+          "mode": "drive",
+          "detail": "阜通东大街→东三环→工体北路",
+          "distance_km": 14.2,
+          "duration_min": 32,
+          "congestion": "smooth"
+        },
+        {
+          "mode": "subway",
+          "line": "14号线→东风北桥",
+          "duration_min": 50
+        }
+      ]
+    }
+  ],
+  "source": "recorded"
+}

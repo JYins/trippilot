@@ -1,0 +1,16 @@
+{
+  "fixture": "restriction_beijing_20261007",
+  "note": "录制响应：版本化测试 fixture，不代表实时限行政策",
+  "expect": {
+    "city": "北京",
+    "date": "2026-10-07"
+  },
+  "city": "北京",
+  "date": "2026-10-07",
+  "holiday": true,
+  "holiday_name": "国庆节假期",
+  "restricted_tails": [],
+  "rule": "2026-10-01 至 10-07 国庆假期，机动车尾号不限行",
+  "rotation": "2026-09-28 起轮换：周一至周五限行尾号分别为 5和0、1和6、2和7、3和8、4和9",
+  "source": "recorded"
+}

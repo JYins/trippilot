@@ -1,0 +1,30 @@
+{
+  "fixture": "weather_ulanqab_next3d",
+  "note": "录制响应：版本化测试 fixture，不代表实时天气",
+  "expect": {
+    "area": "乌兰察布"
+  },
+  "forecast_3d": [
+    {
+      "day_offset": 1,
+      "weather": "晴",
+      "temp_high_c": 18,
+      "temp_low_c": 4
+    },
+    {
+      "day_offset": 2,
+      "weather": "晴",
+      "temp_high_c": 17,
+      "temp_low_c": 3
+    },
+    {
+      "day_offset": 3,
+      "weather": "多云",
+      "temp_high_c": 16,
+      "temp_low_c": 5
+    }
+  ],
+  "verdict": "未来三天以晴为主，昼夜温差大，适宜自驾",
+  "advice": "带足饮水，出发前检查胎压",
+  "source": "recorded"
+}

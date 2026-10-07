@@ -1,0 +1,28 @@
+{
+  "fixture": "map_798_south_gate",
+  "note": "录制响应：版本化测试 fixture，不代表实时路况",
+  "expect": {
+    "destination": "798艺术区南门"
+  },
+  "routes": [
+    {
+      "origin": "阜通站",
+      "destination": "798艺术区南门",
+      "options": [
+        {
+          "mode": "drive",
+          "detail": "阜通东大街→酒仙桥路→798南门",
+          "distance_km": 12.5,
+          "duration_min": 30,
+          "congestion": "smooth"
+        },
+        {
+          "mode": "subway",
+          "line": "14号线→望京→酒仙桥",
+          "duration_min": 55
+        }
+      ]
+    }
+  ],
+  "source": "recorded"
+}
