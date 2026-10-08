@@ -6,13 +6,23 @@
 
 ## 在线体验 demo
 
-这是一个点开链接就能玩的座舱 Agent：输入一句话，看它怎么拆任务、走 trajectory。
+demo 已改走 HF Gradio 免费 Space，部署取舍见
+[`docs/decisions/20261008-deploy-gradio-free.md`](docs/decisions/20261008-deploy-gradio-free.md)。
+入口文件是 `demo/gradio_app.py`：输入一句话，可以看到回答和本轮 trajectory 时间线。
 
 在线链接：（部署后填链接）
 
+- 页面常驻三枚诚实徽章：`座舱状态·模拟`、`地图天气·录制数据`、`无需真实车辆`。
 - 车况是纯软件模拟，不来自真车。
 - 地图和天气使用录制数据，不代表实时结果。
 - 无需 API key，打开即玩。
+
+本地运行：
+
+```bash
+.venv/bin/pip install -r demo/requirements.txt
+.venv/bin/python demo/gradio_app.py
+```
 
 首页全景：
 
