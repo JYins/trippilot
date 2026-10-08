@@ -1,0 +1,10 @@
+# HF Gradio Space 构建用：Space 只读取仓库根目录的 requirements.txt
+# （demo/requirements.txt 会被忽略），缺了它 Space 启动时 import trippilot.api 就会失败。
+gradio==6.29.1
+fastapi>=0.110
+langgraph>=0.1
+pydantic>=2.6
+pyyaml>=6.0
+httpx>=0.27
+qdrant-client>=1.9
+sentence-transformers>=3.0
