@@ -2,14 +2,19 @@
 
 ## 部署到 Hugging Face Spaces
 
-1. 登录 [huggingface.co](https://huggingface.co/)，点击 **New Space**。SDK 选择
-   **Gradio**，硬件选择免费的 **CPU basic**。
-2. 把 `demo/gradio_app.py` 重命名为 `app.py`，放到 Space 仓库根目录；把
-   `demo/requirements.txt` 重命名为 `requirements.txt`，也放到根目录。Space 的
-   Gradio 构建流程从根目录寻找 `app.py` 和 `requirements.txt`，放在 `demo/`
-   子目录不会被默认入口和依赖安装流程识别。其余 TripPilot 源码和录制数据保持原目录
-   一起提交。
-3. 执行 `git push` 后，Space 会自动构建并运行。构建完成后打开 Space 链接即可体验。
+1. 在仓库根目录运行打包脚本：
+
+   ```bash
+   .venv/bin/python demo/build_space.py
+   ```
+
+   脚本会校验 `demo/requirements.txt` 中固定的 Gradio 版本，清理旧的
+   `space_bundle/`，再生成可直接部署的完整目录；secret、运行状态和旧部署配置不会复制进去。
+2. 登录 [huggingface.co](https://huggingface.co/)，新建 Gradio Space，硬件选择免费的
+   **CPU basic**。
+3. 把 `space_bundle/` 里的全部内容推送到 Space 仓库。根目录已经包含 `app.py`、完整的
+   `requirements.txt` 和带 Space 配置的 `README.md`，不需要再手工复制或改名。
+4. 推送后 Space 会自动构建并运行；构建完成后打开 Space 链接即可体验。
 
 demo 默认使用 DeterministicStub，不需要 API key；地图和天气读取录制数据；座舱状态是
 纯软件模拟，不连接真实车辆。默认演示链路没有外部调用，也不加载在线模型，免费档从休眠中
